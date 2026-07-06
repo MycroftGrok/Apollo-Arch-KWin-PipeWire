@@ -164,6 +164,35 @@ if(X11_FOUND)
             "${CMAKE_SOURCE_DIR}/src/platform/linux/x11grab.cpp")
 endif()
 
+
+# PipeWire / Portal / KWin capture
+pkg_check_modules(GIO gio-2.0 gio-unix-2.0 REQUIRED)
+if(GIO_FOUND)
+    include_directories(SYSTEM ${GIO_INCLUDE_DIRS})
+    link_directories(${GIO_LIBRARY_DIRS})
+    list(APPEND PLATFORM_LIBRARIES ${GIO_LIBRARIES})
+endif()
+
+pkg_check_modules(PIPEWIRE libpipewire-0.3 REQUIRED)
+if(PIPEWIRE_FOUND)
+    add_compile_definitions(SUNSHINE_BUILD_PIPEWIRE)
+    include_directories(SYSTEM ${PIPEWIRE_INCLUDE_DIRS})
+    link_directories(${PIPEWIRE_LIBRARY_DIRS})
+    list(APPEND PLATFORM_LIBRARIES ${PIPEWIRE_LIBRARIES})
+    list(APPEND PLATFORM_TARGET_FILES
+            "${CMAKE_SOURCE_DIR}/src/platform/linux/pipewire.cpp")
+endif()
+
+if(WAYLAND_FOUND AND PIPEWIRE_FOUND)
+    add_compile_definitions(SUNSHINE_BUILD_KWIN)
+
+    GEN_WAYLAND("${CMAKE_SOURCE_DIR}/third-party/plasma-wayland-protocols/src/protocols" "" kde-output-order-v1)
+    GEN_WAYLAND("${CMAKE_SOURCE_DIR}/third-party/plasma-wayland-protocols/src/protocols" "" zkde-screencast-unstable-v1)
+
+    list(APPEND PLATFORM_TARGET_FILES
+            "${CMAKE_SOURCE_DIR}/src/platform/linux/kwingrab.cpp")
+endif()
+
 if(NOT ${CUDA_FOUND}
         AND NOT ${WAYLAND_FOUND}
         AND NOT ${X11_FOUND}
