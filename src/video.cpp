@@ -1183,7 +1183,9 @@ namespace video {
     int display_p = -1;
     std::shared_ptr<platf::display_t> disp;
     if (!proc::proc.display_name.empty()) {
-      disp = platf::display(encoder.platform_formats->dev_type, proc::proc.display_name, capture_ctxs.front().config);
+      const auto capture_display_name = physical_capture_display_name(proc::proc.display_name);
+      BOOST_LOG(info) << "Initial capture display requested ["sv << capture_display_name << "]";
+      disp = platf::display(encoder.platform_formats->dev_type, capture_display_name, capture_ctxs.front().config);
     }
     if (!disp) {
       // Get all the monitor names now, rather than at boot, to
