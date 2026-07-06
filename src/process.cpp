@@ -234,7 +234,16 @@ namespace proc {
       }
     }
 
-    if (
+    const bool kwin_configured_output_capture =
+      config::video.capture == "kwin" && !config::video.output_name.empty();
+
+    if (kwin_configured_output_capture) {
+      BOOST_LOG(info) << "KWin capture output [" << config::video.output_name
+                      << "] configured; skipping Apollo virtual display creation";
+      launch_session->virtual_display = false;
+      this->virtual_display = false;
+      this->display_name = config::video.output_name;
+    } else if (
       config::video.headless_mode        // Headless mode
       || launch_session->virtual_display // User requested virtual display
       || _app.virtual_display            // App is configured to use virtual display
