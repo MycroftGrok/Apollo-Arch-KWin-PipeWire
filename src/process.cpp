@@ -351,11 +351,17 @@ namespace proc {
           this->display_name = vdisplayName;
 #endif
 
-          // When using virtual display, we don't care which display user configured to use.
-          // So we always set output_name to the newly created virtual display as a workaround for
-          // empty name when probing graphics cards.
-
-          config::video.output_name = display_device::map_display_name(this->display_name);
+          if (config::video.preserve_physical_display == "enabled" && !config::video.output_name.empty()) {
+            BOOST_LOG(info) << "Preserving physical output_name ["sv << config::video.output_name
+                            << "] while virtual display ["sv << this->display_name << "] is active";
+          } else {
+            config::video.output_name = display_device::map_display_name(this->display_name);
+            if (config::video.output_name.empty()) {
+              config::video.output_name = this->display_name;
+            }
+            BOOST_LOG(info) << "Using virtual output_name ["sv << config::video.output_name
+                            << "] from virtual display ["sv << this->display_name << "]";
+          }
         } else {
           BOOST_LOG(warning) << "Virtual Display creation failed, or cannot get created display name in time!";
         }

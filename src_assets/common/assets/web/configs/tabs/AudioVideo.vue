@@ -118,6 +118,22 @@ const validateFallbackMode = (event) => {
       :config="config"
     />
 
+    <div class="form-check mb-3">
+      <input
+        class="form-check-input"
+        type="checkbox"
+        id="preserve_physical_display"
+        :checked="config.preserve_physical_display === `enabled`"
+        @change="config.preserve_physical_display = $event.target.checked ? `enabled` : `disabled`"
+      />
+      <label class="form-check-label" for="preserve_physical_display">
+        Preserve Physical Display
+      </label>
+      <div class="form-text">
+        Stream the selected physical display while Apollo virtual display is active. Turn this off when you want Apollo to stream only the virtual display.
+      </div>
+    </div>
+
     <DisplayDeviceOptions
       :platform="platform"
       :config="config"
@@ -128,20 +144,6 @@ const validateFallbackMode = (event) => {
         :platform="platform"
         :config="config"
     />
-
-    <!-- Fallback Display Mode -->
-    <div class="mb-3">
-      <label for="fallback_mode" class="form-label">{{ $t('config.fallback_mode') }}</label>
-      <input
-        type="text"
-        class="form-control"
-        id="fallback_mode"
-        v-model="config.fallback_mode"
-        placeholder="1920x1080x60"
-        @input="validateFallbackMode"
-      />
-      <div class="form-text">{{ $t('config.fallback_mode_desc') }}</div>
-    </div>
 
     <!-- Headless Mode -->
     <Checkbox class="mb-3"

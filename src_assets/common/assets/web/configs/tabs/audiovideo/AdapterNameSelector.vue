@@ -1,37 +1,48 @@
 <script setup>
 import { ref } from 'vue'
-import { $tp } from '../../../platform-i18n'
 import PlatformLayout from '../../../PlatformLayout.vue'
 
 const props = defineProps([
-  'platform',
-  'config'
+'platform',
+'config'
 ])
 
 const config = ref(props.config)
+
+const gpuOptions = [
+{ value: '', label: 'Auto Select (Recommended)' },
+{ value: '/dev/dri/renderD128', label: '/dev/dri/renderD128 — GPU 1' },
+{ value: '/dev/dri/renderD129', label: '/dev/dri/renderD129 — GPU 2' }
+]
 </script>
 
 <template>
-  <div class="mb-3" v-if="platform !== 'macos'">
-    <label for="adapter_name" class="form-label">{{ $t('config.adapter_name') }}</label>
-    <input type="text" class="form-control" id="adapter_name"
-           :placeholder="$tp('config.adapter_name_placeholder', '/dev/dri/renderD128')"
-           v-model="config.adapter_name" />
+<div class="mb-3" v-if="platform !== 'macos'">
+    <label for="adapter_name" class="form-label">Streaming GPU</label>
+
+    <select id="adapter_name" class="form-select" v-model="config.adapter_name">
+      <option
+        v-for="gpu in gpuOptions"
+        :key="gpu.value"
+        :value="gpu.value"
+      >
+        {{ gpu.label }}
+      </option>
+    </select>
+
     <div class="form-text">
+      Choose which GPU Apollo should use for capture and encoding. Auto Select is recommended unless you need a specific GPU.
+      <br>
       <PlatformLayout :platform="platform">
-        <template #windows>
-          {{ $t('config.adapter_name_desc_windows') }}<br>
-          <pre>tools\dxgi-info.exe</pre>
-        </template>
         <template #linux>
-          {{ $t('config.adapter_name_desc_linux_1') }}<br>
-          <pre>ls /dev/dri/renderD*  # {{ $t('config.adapter_name_desc_linux_2') }}</pre>
-          <pre>
-              vainfo --display drm --device /dev/dri/renderD129 | \
-                grep -E "((VAProfileH264High|VAProfileHEVCMain|VAProfileHEVCMain10).*VAEntrypointEncSlice)|Driver version"
-            </pre>
-          {{ $t('config.adapter_name_desc_linux_3') }}<br>
-          <i>VAProfileH264High   : VAEntrypointEncSlice</i>
+          <pre style="white-space: pre-line;">
+            Auto Select: Apollo chooses the best available GPU.
+            /dev/dri/renderD128: First render device
+            /dev/dri/renderD129: Second render device
+          </pre>
+        </template>
+        <template #windows>
+          Choose the GPU Apollo should use for capture and encoding.
         </template>
       </PlatformLayout>
     </div>

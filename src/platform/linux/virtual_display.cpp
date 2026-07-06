@@ -203,7 +203,6 @@ namespace VDISPLAY {
   static std::thread watchdog_thread;
   static bool evdi_available = false;
 
-  // Virtual display info structure
   struct VirtualDisplayInfo {
     std::string name;
     std::string guid_str;
@@ -677,6 +676,7 @@ namespace VDISPLAY {
           if (vdinfo.active && vdinfo.using_evdi && vdinfo.handle) {
             // Check EVDI device health
             int ready = evdi.get_event_ready(vdinfo.handle);
+            (void)ready;
             if (ready < 0) {
               BOOST_LOG(error) << "[VDISPLAY] Virtual display " << vdinfo.name << " lost!";
               if (failCb) {
@@ -756,10 +756,11 @@ namespace VDISPLAY {
           // Determine EDID size (128 for base, 256 with extension for 4K)
           unsigned int edid_size = (width > 1920 || height > 1080) ? 256 : 128;
 
-          // Connect with EDID (no area limit)
-          BOOST_LOG(info) << "[VDISPLAY] Connecting with " << edid_size << "-byte EDID for " << width << "x" << height;
-          evdi.connect(handle, edid, edid_size, 0);
-
+          // Connect with EDID and allow the requested mode area.
+          const uint32_t pixel_area_limit = width * height;
+          BOOST_LOG(info) << "[VDISPLAY] Connecting with " << edid_size << "-byte EDID for " << width << "x" << height
+                          << " with pixel area limit " << pixel_area_limit;
+          evdi.connect(handle, edid, edid_size, pixel_area_limit);
           vdinfo.device_index = device;
           vdinfo.handle = handle;
           vdinfo.using_evdi = true;
@@ -832,6 +833,11 @@ namespace VDISPLAY {
     // Find the virtual display
     for (auto &[guid, vdinfo] : virtual_displays) {
       if (vdinfo.name == deviceName) {
+        if (vdinfo.width == width && vdinfo.height == height && (vdinfo.fps == refresh_hz || vdinfo.fps == refresh_rate)) {
+          BOOST_LOG(info) << "[VDISPLAY] Requested display settings already active; skipping EVDI reconnect.";
+          return 0;
+        }
+
         vdinfo.width = width;
         vdinfo.height = height;
         vdinfo.fps = refresh_rate;
@@ -841,8 +847,10 @@ namespace VDISPLAY {
           evdi.disconnect(vdinfo.handle);
           unsigned char *edid = generate_edid_for_resolution(width, height, refresh_hz);
           unsigned int edid_size = (width > 1920 || height > 1080) ? 256 : 128;
-          BOOST_LOG(info) << "[VDISPLAY] Reconnecting with " << edid_size << "-byte EDID for " << width << "x" << height;
-          evdi.connect(vdinfo.handle, edid, edid_size, 0);
+          const uint32_t pixel_area_limit = width * height;
+          BOOST_LOG(info) << "[VDISPLAY] Reconnecting with " << edid_size << "-byte EDID for " << width << "x" << height
+                          << " with pixel area limit " << pixel_area_limit;
+          evdi.connect(vdinfo.handle, edid, edid_size, pixel_area_limit);
         }
 
         BOOST_LOG(info) << "[VDISPLAY] Display settings updated successfully.";

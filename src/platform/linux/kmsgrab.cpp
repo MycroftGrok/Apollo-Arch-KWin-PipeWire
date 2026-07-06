@@ -146,6 +146,9 @@ namespace platf {
       // For example HDMI-A-{index} or HDMI-{index}
       std::uint32_t index;
 
+      // Full connector name, for example HDMI-A-2
+      std::string name;
+
       // ID of the connector
       std::uint32_t connector_id;
 
@@ -384,6 +387,11 @@ namespace platf {
         return ver && ver->name && strncmp(ver->name, "nvidia-drm", 10) == 0;
       }
 
+      bool is_evdi() {
+        version_t ver {drmGetVersion(fd.el)};
+        return ver && ver->name && strncmp(ver->name, "evdi", 4) == 0;
+      }
+
       bool is_cursor(std::uint32_t plane_id) {
         auto props = plane_props(plane_id);
         for (auto &[prop, val] : props) {
@@ -454,11 +462,15 @@ namespace platf {
           }
 
           auto index = ++conn_type_count[conn->connector_type];
+          const auto *type_name_raw = drmModeGetConnectorTypeName(conn->connector_type);
+          const std::string connector_name =
+            std::string(type_name_raw ? type_name_raw : "UNKNOWN") + "-" + std::to_string(index);
 
           monitors.emplace_back(connector_t {
             conn->connector_type,
             crtc_id,
             index,
+            connector_name,
             conn->connector_id,
             conn->connection == DRM_MODE_CONNECTED,
           });
@@ -587,17 +599,24 @@ namespace platf {
       }
 
       int init(const std::string &display_name, const ::video::config_t &config) {
+        BOOST_LOG(info) << "KMS init received display_name ["sv << display_name << "]";
         delay = std::chrono::nanoseconds {1s} / config.framerate;
 
         // Handle virtual display names (e.g., "VIRTUAL-80EE83C6")
-        // Virtual displays don't have a physical KMS representation, so we fall back to the primary monitor
+        // On Linux/EVDI, virtual-only capture should prefer EVDI DRM cards instead of falling back to a physical connector.
+        const bool requested_virtual_display = display_name.rfind("VIRTUAL-", 0) == 0;
         int monitor_index = 0;
-        if (display_name.rfind("VIRTUAL-", 0) != 0) {
-          // Not a virtual display, parse as numeric index
+        std::string requested_connector_name;
+
+        if (requested_virtual_display) {
+          BOOST_LOG(info) << "KMS virtual display requested ["sv << display_name << "], preferring EVDI cards for capture"sv;
+        } else if (!display_name.empty() && std::all_of(display_name.begin(), display_name.end(), ::isdigit)) {
           monitor_index = util::from_view(display_name);
-        } else {
-          BOOST_LOG(debug) << "Virtual display detected ["sv << display_name << "], using primary monitor for KMS capture"sv;
+        } else if (!display_name.empty()) {
+          requested_connector_name = display_name;
+          BOOST_LOG(info) << "KMS named display requested ["sv << requested_connector_name << "]";
         }
+
         int monitor = 0;
 
         fs::path card_dir {"/dev/dri"sv};
@@ -610,11 +629,21 @@ namespace platf {
           }
 
           kms::card_t card;
-          if (card.init(entry.path().c_str())) {
-            continue;
-          }
+if (card.init(entry.path().c_str())) {
+continue;
+}
 
-          // Skip non-Nvidia cards if we're looking for CUDA devices
+if (requested_virtual_display && !card.is_evdi()) {
+BOOST_LOG(debug) << file << " is not an EVDI virtual display card; skipping for virtual capture"sv;
+continue;
+}
+
+if (!requested_virtual_display && card.is_evdi()) {
+BOOST_LOG(debug) << file << " is an EVDI virtual display card; skipping for physical capture"sv;
+continue;
+}
+
+// Skip non-Nvidia cards if we're looking for CUDA devices
           // unless NVENC is selected manually by the user
           if (mem_type == mem_type_e::cuda && !card.is_nvidia()) {
             BOOST_LOG(debug) << file << " is not a CUDA device"sv;
@@ -634,7 +663,30 @@ namespace platf {
               continue;
             }
 
-            if (monitor != monitor_index) {
+            if (!requested_connector_name.empty()) {
+              bool connector_matches = false;
+              kms::conn_type_count_t named_conn_type_count;
+
+              for (auto &connector : card.monitors(named_conn_type_count)) {
+                if (connector.crtc_id != plane->crtc_id) {
+                  continue;
+                }
+
+                BOOST_LOG(info) << "KMS candidate connector ["sv << connector.name
+                                << "] for monitor index ["sv << monitor << "]";
+
+                if (connector.name == requested_connector_name) {
+                  BOOST_LOG(info) << "KMS selected named output ["sv << connector.name << "]";
+                  connector_matches = true;
+                  break;
+                }
+              }
+
+              if (!connector_matches) {
+                ++monitor;
+                continue;
+              }
+            } else if (monitor != monitor_index) {
               ++monitor;
               continue;
             }

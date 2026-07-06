@@ -1075,6 +1075,18 @@ namespace video {
     }
   }
 
+  std::string physical_capture_display_name(const std::string &display_name) {
+    const auto output_name { config::video.output_name };
+
+    if (config::video.preserve_physical_display == "enabled" && !output_name.empty() && display_name.rfind("VIRTUAL-", 0) == 0) {
+      BOOST_LOG(info) << "Virtual display ["sv << display_name
+                      << "] will capture physical output ["sv << output_name << "]";
+      return output_name;
+    }
+
+    return display_name;
+  }
+
   /**
    * @brief Update the list of display names before or during a stream.
    * @details This will attempt to keep `current_display_index` pointing at the same display.
@@ -1084,7 +1096,7 @@ namespace video {
    */
   void refresh_displays(platf::mem_type_e dev_type, std::vector<std::string> &display_names, int &current_display_index, std::string &preferred_display_name) {
     // It is possible that the output name may be empty even if it wasn't before (device disconnected) or vice-versa
-    const auto output_name { display_device::map_output_name(config::video.output_name) };
+    const auto output_name { config::video.output_name };
     std::string current_display_name = preferred_display_name;
 
     // If we have a current display index, let's start with that
@@ -1177,7 +1189,15 @@ namespace video {
       // Get all the monitor names now, rather than at boot, to
       // get the most up-to-date list available monitors
       refresh_displays(encoder.platform_formats->dev_type, display_names, display_p);
-      disp = platf::display(encoder.platform_formats->dev_type, display_names[display_p], capture_ctxs.front().config);
+
+      const auto capture_display_name =
+        !proc::proc.display_name.empty()
+          ? physical_capture_display_name(proc::proc.display_name)
+          : display_names[display_p];
+
+      BOOST_LOG(info) << "Fallback capture display requested ["sv << capture_display_name << ']';
+
+      disp = platf::display(encoder.platform_formats->dev_type, capture_display_name, capture_ctxs.front().config);
       if (disp) {
         proc::proc.display_name = display_names[display_p];
       } else {
@@ -1369,7 +1389,8 @@ namespace video {
               disp.reset();
 
               // Refresh display names since a display removal might have caused the reinitialization
-              refresh_displays(encoder.platform_formats->dev_type, display_names, display_p, proc::proc.display_name);
+              auto preferred_capture_display_name = physical_capture_display_name(proc::proc.display_name);
+              refresh_displays(encoder.platform_formats->dev_type, display_names, display_p, preferred_capture_display_name);
 
               // Process any pending display switch with the new list of displays
               if (switch_display_event->peek()) {
@@ -1377,7 +1398,14 @@ namespace video {
               }
 
               // reset_display() will sleep between retries
-              reset_display(disp, encoder.platform_formats->dev_type, display_names[display_p], capture_ctxs.front().config);
+              const auto capture_display_name =
+                !preferred_capture_display_name.empty()
+                  ? preferred_capture_display_name
+                  : display_names[display_p];
+
+              BOOST_LOG(info) << "Reinit capture display requested ["sv << capture_display_name << ']';
+
+              reset_display(disp, encoder.platform_formats->dev_type, capture_display_name, capture_ctxs.front().config);
               if (disp) {
                 proc::proc.display_name = display_names[display_p];
                 break;
