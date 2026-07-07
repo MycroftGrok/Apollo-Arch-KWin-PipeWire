@@ -652,45 +652,21 @@ namespace VDISPLAY {
   }
 
   bool startPingThread(std::function<void()> failCb) {
+    (void) failCb;
+
     std::lock_guard<std::mutex> lock(vdisplay_mutex);
 
-    if (watchdog_running) {
-      return true;
+    // KWin physical-output capture does not need the Linux virtual-display
+    // watchdog. Leaving this watchdog as a joinable std::thread can abort
+    // Apollo during shutdown/disconnect via std::terminate().
+    watchdog_running = false;
+
+    if (watchdog_thread.joinable()) {
+      BOOST_LOG(warning) << "[VDISPLAY] Detaching stale watchdog thread.";
+      watchdog_thread.detach();
     }
 
-    watchdog_running = true;
-
-    watchdog_thread = std::thread([failCb = std::move(failCb)]() {
-      BOOST_LOG(debug) << "[VDISPLAY] Watchdog thread started.";
-
-      while (watchdog_running) {
-        std::this_thread::sleep_for(5s);
-
-        if (!watchdog_running) {
-          break;
-        }
-
-        std::lock_guard<std::mutex> lock(vdisplay_mutex);
-
-        for (const auto &[guid, vdinfo] : virtual_displays) {
-          if (vdinfo.active && vdinfo.using_evdi && vdinfo.handle) {
-            // Check EVDI device health
-            int ready = evdi.get_event_ready(vdinfo.handle);
-            (void)ready;
-            if (ready < 0) {
-              BOOST_LOG(error) << "[VDISPLAY] Virtual display " << vdinfo.name << " lost!";
-              if (failCb) {
-                failCb();
-              }
-              return;
-            }
-          }
-        }
-      }
-
-      BOOST_LOG(debug) << "[VDISPLAY] Watchdog thread stopped.";
-    });
-
+    BOOST_LOG(info) << "[VDISPLAY] Watchdog ping thread disabled for KWin physical-output capture.";
     return true;
   }
 

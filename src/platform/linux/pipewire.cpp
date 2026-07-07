@@ -127,10 +127,10 @@ namespace pipewire {
    */
   struct img_descriptor_t: public egl::img_descriptor_t {
     ~img_descriptor_t() override {
-      if (data) {
-        delete[] data;
-        data = nullptr;
-      }
+      // PipeWire/SPA buffer memory is not owned by this descriptor.
+      // Do not delete[] data here. The previous destructor could invalid-free
+      // PipeWire-owned memory when capture frames were released after disconnect.
+      data = nullptr;
     }
   };
 
