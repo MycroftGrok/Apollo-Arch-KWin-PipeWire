@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PRIMARY="${APOLLO_PRIMARY_OUTPUT:-HDMI-A-1}"
+SECONDARY="${APOLLO_SECONDARY_OUTPUT:-HDMI-A-2}"
+NAME="${APOLLO_VIRTUAL_NAME:-apollo-test}"
+VIRTUAL_OUTPUT="Virtual-${NAME}"
+LOG="${HOME}/.cache/apollo/kwin-virtual-monitor.log"
+
+mkdir -p "$(dirname "$LOG")"
+
+echo "=== $(date) post-start wait for ${VIRTUAL_OUTPUT} ===" >> "$LOG"
+
+found=0
+for i in $(seq 1 15); do
+  if /usr/bin/kscreen-doctor -o | grep -q "$VIRTUAL_OUTPUT"; then
+    found=1
+    echo "$VIRTUAL_OUTPUT appeared at tick $i" >> "$LOG"
+    break
+  fi
+  sleep 1
+done
+
+if [ "$found" != "1" ]; then
+  echo "ERROR: $VIRTUAL_OUTPUT did not appear" >> "$LOG"
+  /usr/bin/kscreen-doctor -o >> "$LOG" 2>&1 || true
+  exit 1
+fi
+
+echo "=== re-enable physical HDMI outputs while virtual monitor is alive ===" >> "$LOG"
+/usr/bin/kscreen-doctor \
+  "output.${PRIMARY}.enable" \
+  "output.${SECONDARY}.enable" \
+  "output.${PRIMARY}.priority.1" \
+  "output.${SECONDARY}.priority.2" \
+  >> "$LOG" 2>&1 || true
+
+sleep 2
+
+echo "=== display state after HDMI restore ===" >> "$LOG"
+/usr/bin/kscreen-doctor -o >> "$LOG" 2>&1 || true

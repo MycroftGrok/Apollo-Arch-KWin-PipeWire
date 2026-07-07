@@ -1,0 +1,16 @@
+[Unit]
+Description=Safe KWin virtual monitor for Apollo
+After=graphical-session.target
+
+[Service]
+Type=simple
+EnvironmentFile=%h/.config/apollo/kwin-virtual-monitor.env
+ExecStart=/usr/bin/krfb-virtualmonitor --resolution ${APOLLO_VIRTUAL_RESOLUTION} --name ${APOLLO_VIRTUAL_NAME} --password ${APOLLO_KRFB_PASSWORD} --port ${APOLLO_VIRTUAL_PORT}
+ExecStartPost=%h/.local/bin/apollo-kwin-virtual-monitor-poststart
+ExecStopPost=/usr/bin/kscreen-doctor output.HDMI-A-1.enable output.HDMI-A-2.enable output.HDMI-A-1.priority.1 output.HDMI-A-2.priority.2
+Restart=on-failure
+RestartSec=2
+TimeoutStartSec=30
+
+[Install]
+WantedBy=default.target
