@@ -16,8 +16,10 @@ chmod 700 "${HOME}/.config/apollo"
 ENV_FILE="${HOME}/.config/apollo/kwin-virtual-monitor.env"
 
 OLD_PASSWORD=""
+OLD_DISABLE=""
 if [ -f "$ENV_FILE" ]; then
   OLD_PASSWORD="$(grep -E "^APOLLO_KRFB_PASSWORD=" "$ENV_FILE" | head -n1 | cut -d= -f2- || true)"
+  OLD_DISABLE="$(grep -E "^APOLLO_DISABLE_PHYSICAL_ON_STREAM=" "$ENV_FILE" | head -n1 | cut -d= -f2- || true)"
 fi
 
 PASSWORD="${APOLLO_KRFB_PASSWORD:-${OLD_PASSWORD:-change-me}}"
@@ -27,9 +29,13 @@ KWIN_OUTPUT="${APOLLO_KWIN_OUTPUT_NAME:-Virtual-${NAME}}"
 PORT="${APOLLO_VIRTUAL_PORT:-5905}"
 PRIMARY="${APOLLO_PRIMARY_OUTPUT:-HDMI-A-1}"
 SECONDARY="${APOLLO_SECONDARY_OUTPUT:-HDMI-A-2}"
+DISABLE_PHYSICAL="${APOLLO_DISABLE_PHYSICAL_ON_STREAM:-${OLD_DISABLE:-disabled}}"
 
 install -m 755 "${SYSTEMD_SRC}/apollo-kwin-virtual-monitor-poststart" \
   "${HOME}/.local/bin/apollo-kwin-virtual-monitor-poststart"
+
+install -m 755 "${SYSTEMD_SRC}/apollo-display-mode" \
+  "${HOME}/.local/bin/apollo-display-mode"
 
 install -m 644 "${SYSTEMD_SRC}/apollo-kwin-virtual-monitor.service" \
   "${HOME}/.config/systemd/user/apollo-kwin-virtual-monitor.service"
@@ -45,6 +51,7 @@ APOLLO_KWIN_OUTPUT_NAME=${KWIN_OUTPUT}
 APOLLO_VIRTUAL_PORT=${PORT}
 APOLLO_PRIMARY_OUTPUT=${PRIMARY}
 APOLLO_SECONDARY_OUTPUT=${SECONDARY}
+APOLLO_DISABLE_PHYSICAL_ON_STREAM=${DISABLE_PHYSICAL}
 ENV
 
 chmod 600 "$ENV_FILE"
@@ -81,5 +88,7 @@ systemctl --user daemon-reload
 systemctl --user reset-failed
 
 echo "Installed KWin virtual monitor service."
+echo "Installed Apollo display-mode helper."
 echo "Apollo output_name set to: ${KWIN_OUTPUT}"
+echo "Disable physical displays on stream: ${DISABLE_PHYSICAL}"
 echo "Private env file: ${ENV_FILE}"

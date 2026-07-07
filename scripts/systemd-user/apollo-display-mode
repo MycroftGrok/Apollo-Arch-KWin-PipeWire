@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ENV_FILE="${HOME}/.config/apollo/kwin-virtual-monitor.env"
+LOG="${HOME}/.cache/apollo/display-mode.log"
+
+mkdir -p "$(dirname "$LOG")"
+
+if [ -f "$ENV_FILE" ]; then
+  set -a
+  source "$ENV_FILE"
+  set +a
+fi
+
+VIRTUAL="${APOLLO_KWIN_OUTPUT_NAME:-Virtual-Apollo-Display}"
+PRIMARY="${APOLLO_PRIMARY_OUTPUT:-HDMI-A-1}"
+SECONDARY="${APOLLO_SECONDARY_OUTPUT:-HDMI-A-2}"
+DISABLE_ON_STREAM="${APOLLO_DISABLE_PHYSICAL_ON_STREAM:-disabled}"
+
+mode="${1:-status}"
+
+log() {
+  echo "[$(date)] $*" >> "$LOG"
+}
+
+restore_physical() {
+  log "restore physical displays: ${PRIMARY}, ${SECONDARY}; keep ${VIRTUAL} enabled"
+  /usr/bin/kscreen-doctor \
+    "output.${VIRTUAL}.enable" \
+    "output.${VIRTUAL}.priority.3" \
+    "output.${PRIMARY}.enable" \
+    "output.${SECONDARY}.enable" \
+    "output.${PRIMARY}.priority.1" \
+    "output.${SECONDARY}.priority.2" \
+    >> "$LOG" 2>&1 || true
+}
+
+disable_physical() {
+  if [ "$DISABLE_ON_STREAM" != "enabled" ]; then
+    log "connect requested, but APOLLO_DISABLE_PHYSICAL_ON_STREAM=${DISABLE_ON_STREAM}; no-op"
+    exit 0
+  fi
+
+  log "disable physical displays for stream: ${PRIMARY}, ${SECONDARY}; keep ${VIRTUAL} enabled"
+  /usr/bin/kscreen-doctor \
+    "output.${VIRTUAL}.enable" \
+    "output.${VIRTUAL}.priority.1" \
+    "output.${PRIMARY}.disable" \
+    "output.${SECONDARY}.disable" \
+    >> "$LOG" 2>&1 || true
+}
+
+case "$mode" in
+  connect)
+    disable_physical
+    ;;
+  disconnect)
+    restore_physical
+    ;;
+  restore)
+    restore_physical
+    ;;
+  status)
+    /usr/bin/kscreen-doctor -o | grep -A14 -E "${VIRTUAL}|${PRIMARY}|${SECONDARY}|Output:" || true
+    ;;
+  *)
+    echo "usage: $0 connect|disconnect|restore|status" >&2
+    exit 2
+    ;;
+esac
