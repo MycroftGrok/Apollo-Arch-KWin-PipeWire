@@ -1,70 +1,151 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/sh
+set -eu
 
 ENV_FILE="${HOME}/.config/apollo/kwin-virtual-monitor.env"
-LOG="${HOME}/.cache/apollo/display-mode.log"
+LOG_FILE="/tmp/apollo-cursor-park.log"
+CURSOR_STATE_FILE="${XDG_RUNTIME_DIR:-/tmp}/apollo-cursor-restore-position"
 
-mkdir -p "$(dirname "$LOG")"
+[ -f "$ENV_FILE" ] && . "$ENV_FILE"
 
-if [ -f "$ENV_FILE" ]; then
-  set -a
-  source "$ENV_FILE"
-  set +a
-fi
+APOLLO_KWIN_OUTPUT_NAME="${APOLLO_KWIN_OUTPUT_NAME:-Virtual-Apollo-Display}"
+APOLLO_PRIMARY_OUTPUT="${APOLLO_PRIMARY_OUTPUT:-HDMI-A-1}"
+APOLLO_SECONDARY_OUTPUT="${APOLLO_SECONDARY_OUTPUT:-HDMI-A-2}"
+APOLLO_DISABLE_PHYSICAL_ON_STREAM="${APOLLO_DISABLE_PHYSICAL_ON_STREAM:-enabled}"
 
-VIRTUAL="${APOLLO_KWIN_OUTPUT_NAME:-Virtual-Apollo-Display}"
-PRIMARY="${APOLLO_PRIMARY_OUTPUT:-HDMI-A-1}"
-SECONDARY="${APOLLO_SECONDARY_OUTPUT:-HDMI-A-2}"
-DISABLE_ON_STREAM="${APOLLO_DISABLE_PHYSICAL_ON_STREAM:-disabled}"
+APOLLO_CURSOR_STREAM_X="${APOLLO_CURSOR_STREAM_X:-200}"
+APOLLO_CURSOR_STREAM_Y="${APOLLO_CURSOR_STREAM_Y:-200}"
 
-mode="${1:-status}"
+APOLLO_SECONDARY_POSITION="${APOLLO_SECONDARY_POSITION:-0,0}"
+APOLLO_PRIMARY_POSITION="${APOLLO_PRIMARY_POSITION:-1920,0}"
+APOLLO_VIRTUAL_POSITION="${APOLLO_VIRTUAL_POSITION:-3840,0}"
 
 log() {
-  echo "[$(date)] $*" >> "$LOG"
+  echo "[$(date)] $*" >> "$LOG_FILE"
 }
 
-restore_physical() {
-  log "restore physical displays: ${PRIMARY}, ${SECONDARY}; keep ${VIRTUAL} enabled"
-  /usr/bin/kscreen-doctor \
-    "output.${VIRTUAL}.enable" \
-    "output.${VIRTUAL}.priority.3" \
-    "output.${PRIMARY}.enable" \
-    "output.${SECONDARY}.enable" \
-    "output.${PRIMARY}.priority.1" \
-    "output.${SECONDARY}.priority.2" \
-    >> "$LOG" 2>&1 || true
+read_cursor_position() {
+  if command -v kdotool >/dev/null 2>&1; then
+    kdotool getmouselocation 2>/dev/null | grep -oE -- "-?[0-9]+" | head -n 2 | tr "\n" " "
+  fi
 }
 
-disable_physical() {
-  if [ "$DISABLE_ON_STREAM" != "enabled" ]; then
-    log "connect requested, but APOLLO_DISABLE_PHYSICAL_ON_STREAM=${DISABLE_ON_STREAM}; no-op"
-    exit 0
+save_cursor_position() {
+  pos="$(read_cursor_position || true)"
+  set -- $pos
+  if [ -n "${1:-}" ] && [ -n "${2:-}" ]; then
+    printf "%s %s\n" "$1" "$2" > "$CURSOR_STATE_FILE"
+    log "saved cursor position: $1 $2"
+  else
+    log "failed to save cursor position"
+  fi
+}
+
+ensure_ydotoold() {
+  if command -v ydotoold >/dev/null 2>&1; then
+    pgrep -x ydotoold >/dev/null 2>&1 || nohup ydotoold >/tmp/ydotoold.log 2>&1 &
+    sleep 0.3
+  fi
+}
+
+move_cursor_to() {
+  target_x="$1"
+  target_y="$2"
+
+  ensure_ydotoold
+
+  if ! command -v ydotool >/dev/null 2>&1; then
+    log "ydotool not found"
+    return 0
   fi
 
-  log "disable physical displays for stream: ${PRIMARY}, ${SECONDARY}; keep ${VIRTUAL} enabled"
-  /usr/bin/kscreen-doctor \
-    "output.${VIRTUAL}.enable" \
-    "output.${VIRTUAL}.priority.1" \
-    "output.${PRIMARY}.disable" \
-    "output.${SECONDARY}.disable" \
-    >> "$LOG" 2>&1 || true
+  i=0
+  while [ "$i" -lt 18 ]; do
+    current="$(read_cursor_position || true)"
+    set -- $current
+    cur_x="${1:-}"
+    cur_y="${2:-}"
+
+    if [ -z "$cur_x" ] || [ -z "$cur_y" ]; then
+      log "cursor position read failed during move"
+      return 0
+    fi
+
+    dx=$((target_x - cur_x))
+    dy=$((target_y - cur_y))
+
+    dx_abs="${dx#-}"
+    dy_abs="${dy#-}"
+
+    log "cursor move step $i current=${cur_x},${cur_y} target=${target_x},${target_y} delta=${dx},${dy}"
+
+    if [ "$dx_abs" -le 4 ] && [ "$dy_abs" -le 4 ]; then
+      log "cursor move close enough"
+      return 0
+    fi
+
+    ydotool mousemove -- "$dx" "$dy" >> "$LOG_FILE" 2>&1 || true
+    sleep 0.2
+    i=$((i + 1))
+  done
+
+  final="$(read_cursor_position || true)"
+  log "cursor move final position: ${final:-unknown}"
 }
 
-case "$mode" in
+restore_layout() {
+  kscreen-doctor \
+    "output.${APOLLO_PRIMARY_OUTPUT}.enable" \
+    "output.${APOLLO_SECONDARY_OUTPUT}.enable" \
+    "output.${APOLLO_KWIN_OUTPUT_NAME}.enable" \
+    "output.${APOLLO_SECONDARY_OUTPUT}.position.${APOLLO_SECONDARY_POSITION}" \
+    "output.${APOLLO_PRIMARY_OUTPUT}.position.${APOLLO_PRIMARY_POSITION}" \
+    "output.${APOLLO_KWIN_OUTPUT_NAME}.position.${APOLLO_VIRTUAL_POSITION}" \
+    "output.${APOLLO_PRIMARY_OUTPUT}.priority.1" \
+    "output.${APOLLO_SECONDARY_OUTPUT}.priority.2" \
+    "output.${APOLLO_KWIN_OUTPUT_NAME}.priority.3" >> "$LOG_FILE" 2>&1 || true
+}
+
+case "${1:-}" in
   connect)
-    disable_physical
+    save_cursor_position
+
+    if [ "$APOLLO_DISABLE_PHYSICAL_ON_STREAM" = "enabled" ]; then
+      log "disable physical displays: ${APOLLO_PRIMARY_OUTPUT}, ${APOLLO_SECONDARY_OUTPUT}; keep ${APOLLO_KWIN_OUTPUT_NAME}"
+      kscreen-doctor \
+        "output.${APOLLO_KWIN_OUTPUT_NAME}.enable" \
+        "output.${APOLLO_PRIMARY_OUTPUT}.disable" \
+        "output.${APOLLO_SECONDARY_OUTPUT}.disable" >> "$LOG_FILE" 2>&1 || true
+    else
+      log "physical display disable is disabled"
+    fi
+
+    sleep 1
+    log "parking cursor on stream: ${APOLLO_CURSOR_STREAM_X} ${APOLLO_CURSOR_STREAM_Y}"
+    move_cursor_to "$APOLLO_CURSOR_STREAM_X" "$APOLLO_CURSOR_STREAM_Y"
     ;;
+
   disconnect)
-    restore_physical
+    if [ "$APOLLO_DISABLE_PHYSICAL_ON_STREAM" = "enabled" ]; then
+      log "restore physical displays and layout"
+      restore_layout
+    else
+      log "physical display restore skipped"
+    fi
+
+    sleep 6
+
+    if [ -f "$CURSOR_STATE_FILE" ]; then
+      set -- $(cat "$CURSOR_STATE_FILE")
+      log "restoring saved cursor position: ${1:-missing} ${2:-missing}"
+      move_cursor_to "${1:-2200}" "${2:-200}"
+    else
+      log "no saved cursor position; fallback restore"
+      move_cursor_to 2200 200
+    fi
     ;;
-  restore)
-    restore_physical
-    ;;
-  status)
-    /usr/bin/kscreen-doctor -o | grep -A14 -E "${VIRTUAL}|${PRIMARY}|${SECONDARY}|Output:" || true
-    ;;
+
   *)
-    echo "usage: $0 connect|disconnect|restore|status" >&2
+    echo "Usage: $0 connect|disconnect" >&2
     exit 2
     ;;
 esac

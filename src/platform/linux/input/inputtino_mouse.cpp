@@ -27,7 +27,11 @@ namespace platf::mouse {
 
   void move_abs(input_raw_t *raw, const touch_port_t &touch_port, float x, float y) {
     if (raw->mouse) {
-      (*raw->mouse).move_abs(x, y, touch_port.width, touch_port.height);
+      // input.cpp maps client coordinates into the captured output viewport.
+      // On multi-output Wayland/KWin, the captured output may be offset inside
+      // the global desktop, e.g. Virtual-Apollo-Display at 3840x0.
+      // inputtino needs coordinates in the global desktop coordinate space.
+      (*raw->mouse).move_abs(x + touch_port.offset_x, y + touch_port.offset_y, touch_port.width, touch_port.height);
     }
   }
 
