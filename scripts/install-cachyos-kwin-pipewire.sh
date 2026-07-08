@@ -60,6 +60,7 @@ packages=(
   wireplumber
   krfb
   kscreen
+  ydotool
   qt6-wayland
   wayland-protocols
   mesa
@@ -70,6 +71,21 @@ sudo pacman -S --needed --noconfirm "${packages[@]}"
 
 command -v krfb-virtualmonitor >/dev/null 2>&1 || fail "krfb-virtualmonitor was not found after installing krfb."
 command -v kscreen-doctor >/dev/null 2>&1 || fail "kscreen-doctor was not found after installing kscreen."
+
+if ! command -v kdotool >/dev/null 2>&1; then
+  say "Installing kdotool for KDE/Wayland cursor position restore"
+  if command -v paru >/dev/null 2>&1; then
+    paru -S --needed --noconfirm kdotool
+  elif command -v yay >/dev/null 2>&1; then
+    yay -S --needed --noconfirm kdotool
+  else
+    fail "kdotool is required for cursor save/restore. Install paru or yay, then run: paru -S --needed kdotool"
+  fi
+fi
+
+command -v ydotool >/dev/null 2>&1 || fail "ydotool was not found after package install."
+command -v ydotoold >/dev/null 2>&1 || fail "ydotoold was not found after package install."
+command -v kdotool >/dev/null 2>&1 || fail "kdotool was not found after install."
 
 say "Building Apollo"
 rm -rf cmake-build-debug pkg
