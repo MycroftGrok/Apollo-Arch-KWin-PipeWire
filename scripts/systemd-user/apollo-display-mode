@@ -92,6 +92,10 @@ move_cursor_to() {
   log "cursor move final position: ${final:-unknown}"
 }
 
+show_status() {
+  kscreen-doctor -o | grep -A14 -E "${APOLLO_KWIN_OUTPUT_NAME}|${APOLLO_PRIMARY_OUTPUT}|${APOLLO_SECONDARY_OUTPUT}|Output:" || true
+}
+
 restore_layout() {
   kscreen-doctor \
     "output.${APOLLO_PRIMARY_OUTPUT}.enable" \
@@ -144,8 +148,22 @@ case "${1:-}" in
     fi
     ;;
 
+  restore)
+    log "manual restore requested"
+    restore_layout
+    sleep 2
+    if [ -f "$CURSOR_STATE_FILE" ]; then
+      set -- $(cat "$CURSOR_STATE_FILE")
+      move_cursor_to "${1:-2200}" "${2:-200}"
+    fi
+    ;;
+
+  status)
+    show_status
+    ;;
+
   *)
-    echo "Usage: $0 connect|disconnect" >&2
+    echo "Usage: $0 connect|disconnect|restore|status" >&2
     exit 2
     ;;
 esac
