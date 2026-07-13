@@ -181,3 +181,49 @@ Fix preserved KWin capture display selection
 Add Apollo display selection and preserve physical display controls
 Port KWin PipeWire capture backend to Apollo
 ```
+## Cursor routing for KWin virtual streams
+
+When Apollo captures `Virtual-Apollo-Display`, KWin only embeds the cursor if the host cursor is inside that virtual output. This branch uses `apollo-display-mode` to handle that automatically.
+
+On stream connect, the helper:
+
+1. Saves the current host cursor position with `kdotool`.
+2. Optionally disables the configured physical HDMI outputs.
+3. Moves the cursor into `Virtual-Apollo-Display` using `ydotool` relative movement.
+
+On stream disconnect, the helper:
+
+1. Restores the configured physical display layout.
+2. Waits for KWin/KScreen to settle.
+3. Moves the cursor back to the saved position.
+
+Required cursor-routing tools:
+
+    sudo pacman -S --needed ydotool
+    paru -S --needed kdotool
+
+Useful test commands:
+
+    ~/.local/bin/apollo-display-mode status
+    cat /tmp/apollo-cursor-park.log
+    kdotool getmouselocation --shell
+
+The helper auto-starts `ydotoold` if it is not already running. If cursor movement fails, check:
+
+    cat /tmp/ydotoold.log
+
+For custom layouts, edit:
+
+    ~/.config/apollo/kwin-virtual-monitor.env
+
+Common values used during testing:
+
+    APOLLO_KWIN_OUTPUT_NAME=Virtual-Apollo-Display
+    APOLLO_PRIMARY_OUTPUT=HDMI-A-1
+    APOLLO_SECONDARY_OUTPUT=HDMI-A-2
+    APOLLO_DISABLE_PHYSICAL_ON_STREAM=enabled
+    APOLLO_CURSOR_STREAM_X=200
+    APOLLO_CURSOR_STREAM_Y=200
+    APOLLO_SECONDARY_POSITION=0,0
+    APOLLO_PRIMARY_POSITION=1920,0
+    APOLLO_VIRTUAL_POSITION=3840,0
