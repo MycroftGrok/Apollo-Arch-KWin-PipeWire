@@ -42,6 +42,13 @@ namespace platf::gamepad {
                                             .version = 0x8111});
   }
 
+  auto create_steam() {
+    return inputtino::SteamJoypad::create({.name = "Sunshine Steam Controller (virtual) pad",
+                                           .vendor_id = 0x28DE,
+                                           .product_id = 0x1302,
+                                           .version = 0x0100});
+  }
+
   auto create_ds5(int globalIndex) {
     std::string device_mac = "";  // Inputtino checks empty() to generate a random MAC
 
@@ -65,6 +72,9 @@ namespace platf::gamepad {
     } else if (config::input.gamepad == "switch"sv) {
       BOOST_LOG(info) << "Gamepad " << id.globalIndex << " will be Nintendo Pro controller (manual selection)"sv;
       selectedGamepadType = SwitchProWired;
+    } else if (config::input.gamepad == "steam"sv) {
+      BOOST_LOG(info) << "Gamepad " << id.globalIndex << " will be Steam Controller (manual selection)"sv;
+      selectedGamepadType = SteamControllerWired;
     } else if (metadata.type == LI_CTYPE_XBOX) {
       BOOST_LOG(info) << "Gamepad " << id.globalIndex << " will be Xbox One controller (auto-selected by client-reported type)"sv;
       selectedGamepadType = XboxOneWired;
@@ -85,7 +95,7 @@ namespace platf::gamepad {
       selectedGamepadType = XboxOneWired;
     }
 
-    if (selectedGamepadType == XboxOneWired || selectedGamepadType == SwitchProWired) {
+    if (selectedGamepadType == XboxOneWired || selectedGamepadType == SwitchProWired || selectedGamepadType == SteamControllerWired) {
       if (metadata.capabilities & (LI_CCAP_ACCEL | LI_CCAP_GYRO)) {
         BOOST_LOG(warning) << "Gamepad " << id.globalIndex << " has motion sensors, but they are not usable when emulating a joypad different from DS5"sv;
       }
@@ -140,6 +150,19 @@ namespace platf::gamepad {
             return 0;
           } else {
             BOOST_LOG(warning) << "Unable to create virtual Switch Pro controller: " << switchPro.getErrorMessage();
+            return -1;
+          }
+        }
+      case SteamControllerWired:
+        {
+          auto steam = create_steam();
+          if (steam) {
+            (*steam).set_on_rumble(on_rumble_fn);
+            gamepad->joypad = std::make_unique<joypads_t>(std::move(*steam));
+            raw->gamepads[id.globalIndex] = std::move(gamepad);
+            return 0;
+          } else {
+            BOOST_LOG(warning) << "Unable to create virtual Steam Controller: " << steam.getErrorMessage();
             return -1;
           }
         }
@@ -269,6 +292,7 @@ namespace platf::gamepad {
         supported_gamepad_t {"xone", false, ""},
         supported_gamepad_t {"ds5", false, ""},
         supported_gamepad_t {"switch", false, ""},
+        supported_gamepad_t {"steam", false, ""},
       };
 
       return gps;
@@ -277,12 +301,14 @@ namespace platf::gamepad {
     auto ds5 = create_ds5(-1);  // Index -1 will result in a random MAC virtual device, which is fine for probing
     auto switchPro = create_switch();
     auto xOne = create_xbox_one();
+    auto steam = create_steam();
 
     static std::vector gps {
       supported_gamepad_t {"auto", true, ""},
       supported_gamepad_t {"xone", static_cast<bool>(xOne), !xOne ? xOne.getErrorMessage() : ""},
       supported_gamepad_t {"ds5", static_cast<bool>(ds5), !ds5 ? ds5.getErrorMessage() : ""},
       supported_gamepad_t {"switch", static_cast<bool>(switchPro), !switchPro ? switchPro.getErrorMessage() : ""},
+      supported_gamepad_t {"steam", static_cast<bool>(steam), !steam ? steam.getErrorMessage() : ""},
     };
 
     for (auto &[name, is_enabled, reason_disabled] : gps) {

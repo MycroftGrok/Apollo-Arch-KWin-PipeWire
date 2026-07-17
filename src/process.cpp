@@ -8,6 +8,8 @@
  #define BOOST_PROCESS_VERSION 1
 #endif
 // standard includes
+#include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <string>
 #include <thread>
@@ -211,6 +213,49 @@ namespace proc {
       render_width &= ~1;
       render_height &= ~1;
     }
+
+    #ifndef _WIN32
+    if (config::video.capture == "kwin" &&
+        config::video.output_name.rfind("Virtual-", 0) == 0) {
+      if (!config::video.kwin_virtual_display_client_override) {
+        unsigned int fixed_width = 0;
+        unsigned int fixed_height = 0;
+
+        if (std::sscanf(
+              config::video.fallback_mode.c_str(),
+              "%ux%u",
+              &fixed_width,
+              &fixed_height
+            ) == 2 &&
+            fixed_width >= 320 && fixed_height >= 200 &&
+            fixed_width <= 16384 && fixed_height <= 16384) {
+          render_width = fixed_width;
+          render_height = fixed_height;
+          BOOST_LOG(info) << "Using configured fixed KWin virtual-display resolution ["
+                          << render_width << 'x' << render_height << ']';
+        } else {
+          BOOST_LOG(warning) << "Invalid fallback_mode for KWin virtual display ["
+                             << config::video.fallback_mode
+                             << "]; using the client render resolution.";
+        }
+      } else {
+        BOOST_LOG(info) << "Using client-requested KWin virtual-display resolution ["
+                        << render_width << 'x' << render_height << ']';
+      }
+
+      const std::string configure_command =
+        R"(if [ -x "$HOME/.local/bin/apollo-display-mode" ]; then "$HOME/.local/bin/apollo-display-mode" configure )" +
+        std::to_string(render_width) + " " +
+        std::to_string(render_height) +
+        R"(; fi)";
+
+      const int configure_result = std::system(configure_command.c_str());
+      if (configure_result != 0) {
+        BOOST_LOG(warning) << "KWin virtual-display resolution helper failed with code ["
+                           << configure_result << "]; continuing with the existing output.";
+      }
+    }
+#endif
 
     launch_session->width = render_width;
     launch_session->height = render_height;

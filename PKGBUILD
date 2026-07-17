@@ -53,8 +53,9 @@ package() {
     install -Dm755 "cmake-build-debug/sunshine" "${pkgdir}/usr/bin/apollo"
     
     # Assets
-    install -dm755 "${pkgdir}/usr/share/apollo"
-    cp -r cmake-build-debug/assets/* "${pkgdir}/usr/share/apollo/"
+    # Apollo is compiled with SUNSHINE_ASSETS_DIR=/usr/local/assets.
+    install -dm755 "${pkgdir}/usr/local/assets"
+    cp -a cmake-build-debug/assets/. "${pkgdir}/usr/local/assets/"
     
     # Ícones
     install -Dm644 "apollo.svg" "${pkgdir}/usr/share/icons/hicolor/scalable/apps/apollo.svg"

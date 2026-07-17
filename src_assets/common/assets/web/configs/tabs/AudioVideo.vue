@@ -134,6 +134,53 @@ const validateFallbackMode = (event) => {
       </div>
     </div>
 
+    <!-- KWin virtual-display controls: begin -->
+    <div class="form-check mb-3">
+      <input
+        class="form-check-input"
+        type="checkbox"
+        id="kwin_virtual_display_client_override"
+        :checked="config.kwin_virtual_display_client_override === `enabled`"
+        @change="config.kwin_virtual_display_client_override = $event.target.checked ? `enabled` : `disabled`"
+      />
+      <label
+        class="form-check-label"
+        for="kwin_virtual_display_client_override"
+      >
+        Allow client to override the KWin virtual-display resolution
+      </label>
+      <div class="form-text">
+        When enabled, Apollo recreates Virtual-Apollo-Display using the
+        resolution requested by the streaming client.
+      </div>
+    </div>
+
+    <div class="mb-3">
+      <label for="dd_hdr_option_linux" class="form-label">
+        HDR request handling
+      </label>
+
+      <select
+        id="dd_hdr_option_linux"
+        class="form-select"
+        v-model="config.dd_hdr_option"
+      >
+        <option value="disabled">
+          Do not change HDR settings
+        </option>
+        <option value="auto">
+          Follow the HDR state requested by the client
+        </option>
+      </select>
+
+      <div class="alert alert-warning mt-2 mb-0">
+        The current krfb/KWin virtual output reports HDR as incapable.
+        Apollo can save the client HDR preference, but actual HDR requires
+        an HDR-capable virtual-display backend.
+      </div>
+    </div>
+    <!-- KWin virtual-display controls: end -->
+
     <DisplayDeviceOptions
       :platform="platform"
       :config="config"

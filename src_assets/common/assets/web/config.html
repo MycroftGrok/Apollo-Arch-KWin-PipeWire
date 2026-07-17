@@ -196,7 +196,8 @@
               "adapter_name": "",
               "output_name": "",
               "preserve_physical_display": "disabled",
-              "fallback_mode": "",
+              "kwin_virtual_display_client_override": "disabled",
+              "fallback_mode": "1920x1080x60",
               "dd_configuration_option": "disabled",
               "dd_resolution_option": "auto",
               "dd_manual_resolution": "",
@@ -208,7 +209,6 @@
               "dd_config_revert_on_disconnect": "disabled",
               "dd_mode_remapping": {"mixed": [], "resolution_only": [], "refresh_rate_only": []},
               "dd_wa_hdr_toggle": "disabled",
-              "fallback_mode": "",
               "headless_mode": "disabled",
               "double_refreshrate": "disabled",
               "max_bitrate": 0,
@@ -441,9 +441,18 @@
         this.tabs.forEach(tab => {
           Object.keys(tab.options).forEach(optionKey => {
             let delete_value = false
+            const persistentLinuxOptions = [
+              "fallback_mode",
+              "kwin_virtual_display_client_override",
+              "dd_hdr_option",
+            ]
+            const keepExplicitly =
+              this.platform === "linux" &&
+              persistentLinuxOptions.includes(optionKey)
 
             // todo: add proper type checking
-            if (JSON.stringify(config[optionKey]) === JSON.stringify(tab.options[optionKey])) {
+            if (!keepExplicitly &&
+                JSON.stringify(config[optionKey]) === JSON.stringify(tab.options[optionKey])) {
               delete_value = true
             }
 

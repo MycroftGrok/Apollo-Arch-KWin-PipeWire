@@ -227,3 +227,77 @@ Common values used during testing:
     APOLLO_SECONDARY_POSITION=0,0
     APOLLO_PRIMARY_POSITION=1920,0
     APOLLO_VIRTUAL_POSITION=3840,0
+
+## Working display lifecycle
+
+This restore point uses the proven archived KScreen state manager.
+
+### Connected state
+
+When an Artemis/Odin stream connects:
+
+1. Apollo passes the selected streaming output to `apollo-display-mode`.
+2. `apollo-display-mode` calls:
+
+   ```text
+   /usr/local/bin/apollo-kscreen-stream-monitors apply <selected-output>
+   ```
+
+3. The helper saves the complete pre-stream KScreen layout.
+4. The selected streaming output is enabled.
+5. Every other connected display is disabled.
+
+The selected streaming output is therefore the only active display.
+
+### Disconnected state
+
+When the stream disconnects:
+
+1. `apollo-display-mode` calls the staged `post-disconnect` recovery.
+2. The helper waits for Apollo and PipeWire teardown.
+3. The saved physical outputs and their priorities are restored.
+4. The restored primary output is verified.
+5. The virtual streaming output is disabled.
+
+The idle state therefore has all physical displays enabled and the Apollo virtual display disabled.
+
+### Important safety warning
+
+Do not manually run `krfb-virtualmonitor` and do not manually restart
+`apollo-kwin-virtual-monitor.service` merely to test display switching.
+A previous manual virtual-monitor test disabled the primary physical display
+and required a reboot.
+
+### Clean rebuild requirements
+
+Never delete the repository `src` directory.
+
+Before configuring a fresh build, remove only:
+
+```text
+cmake-build-debug
+pkg
+src_assets/common/assets/web/node_modules/.vite
+```
+
+Build using all CPU cores. After building, install `/usr/local/assets` from:
+
+```text
+cmake-build-debug/assets/.
+```
+
+Do not populate `/usr/local/assets` from `src_assets/common/assets`; that source
+directory does not contain the generated shader assets required by the installed
+Apollo build.
+
+### Restore-point layout
+
+The exact working display helpers are stored in:
+
+```text
+scripts/systemd-user/apollo-display-mode
+scripts/systemd-user/apollo-kscreen-stream-monitors
+```
+
+The annotated `working-apollo-*` Git tag records the complete known-good Apollo
+tree, including the exact Inputtino submodule commit.

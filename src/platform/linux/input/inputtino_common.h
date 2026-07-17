@@ -19,7 +19,7 @@ using namespace std::literals;
 
 namespace platf {
 
-  using joypads_t = std::variant<inputtino::XboxOneJoypad, inputtino::SwitchJoypad, inputtino::PS5Joypad>;
+  using joypads_t = std::variant<inputtino::XboxOneJoypad, inputtino::SwitchJoypad, inputtino::PS5Joypad, inputtino::SteamJoypad>;
 
   struct joypad_state {
     std::unique_ptr<joypads_t> joypad;

@@ -1,0 +1,527 @@
+#!/usr/bin/env python3
+import os
+import re
+import shutil
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+PREFIX = "[apollo-kscreen]"
+RUNTIME_DIR = os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"
+STATE_DIR = Path(RUNTIME_DIR) / "apollo"
+STATE_FILE = STATE_DIR / "kscreen-before-stream.state"
+LOCK_FILE = STATE_DIR / "post-disconnect-restore.lock"
+ANSI_RE = re.compile(r"\x1B\[[0-9;]*m")
+META_TARGET = "#target="
+
+SETTLE_SECONDS = float(os.environ.get("APOLLO_KSCREEN_SETTLE_SECONDS", "5"))
+AFTER_PRIMARY_SECONDS = float(os.environ.get("APOLLO_KSCREEN_AFTER_PRIMARY_SECONDS", "2"))
+RETRIES = int(os.environ.get("APOLLO_KSCREEN_RETRIES", "8"))
+RETRY_SLEEP = float(os.environ.get("APOLLO_KSCREEN_RETRY_SLEEP", "0.75"))
+
+
+def log(message: str) -> None:
+    print(f"{PREFIX} {message}", file=sys.stderr, flush=True)
+
+
+def run(args: list[str], check: bool = False) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        args,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        check=check,
+    )
+
+
+def doctor_output() -> str:
+    result = run(["kscreen-doctor", "-o"], check=True)
+    return ANSI_RE.sub("", result.stdout)
+
+
+def parse_geometry(value: str):
+    match = re.match(r"^\s*(-?\d+),(-?\d+)\s+(\d+)x(\d+)\s*$", value)
+    if not match:
+        return None
+    return tuple(int(part) for part in match.groups())
+
+
+def local_center(value: str):
+    parsed = parse_geometry(value)
+    if not parsed:
+        return None
+    _x, _y, w, h = parsed
+    return w // 2, h // 2
+
+
+def global_center(value: str):
+    parsed = parse_geometry(value)
+    if not parsed:
+        return None
+    x, y, w, h = parsed
+    return x + w // 2, y + h // 2
+
+
+def parse_outputs():
+    outputs = []
+    current = None
+
+    for raw_line in doctor_output().splitlines():
+        line = raw_line.rstrip()
+        match = re.match(r"^Output:\s+\S+\s+(\S+)", line)
+        if match:
+            current = {
+                "name": match.group(1),
+                "enabled": "unknown",
+                "connected": "unknown",
+                "priority": "",
+                "geometry": "",
+            }
+            outputs.append(current)
+            continue
+
+        if current is None:
+            continue
+
+        stripped = line.strip()
+        if stripped == "enabled":
+            current["enabled"] = "enabled"
+        elif stripped == "disabled":
+            current["enabled"] = "disabled"
+        elif stripped == "connected":
+            current["connected"] = "connected"
+        elif stripped == "disconnected":
+            current["connected"] = "disconnected"
+        else:
+            priority_match = re.match(r"^priority\s+(\d+)$", stripped)
+            if priority_match:
+                current["priority"] = priority_match.group(1)
+                continue
+
+            geometry_match = re.match(r"^Geometry:\s+(.+)$", stripped)
+            if geometry_match:
+                current["geometry"] = geometry_match.group(1).strip()
+
+    return outputs
+
+
+def output_by_name(outputs, name: str):
+    for output in outputs:
+        if output["name"] == name:
+            return output
+    return None
+
+
+def primary_from_outputs(outputs, target: str = ""):
+    candidates = [
+        output
+        for output in outputs
+        if output["enabled"] == "enabled"
+        and output["connected"] == "connected"
+        and output["name"] != target
+    ]
+
+    if not candidates:
+        return None
+
+    with_priority = [
+        output for output in candidates if output["priority"].isdigit()
+    ]
+    if with_priority:
+        return min(with_priority, key=lambda output: int(output["priority"]))
+
+    return candidates[0]
+
+
+def run_kscreen(commands):
+    if not commands:
+        return 0
+    log("kscreen-doctor " + " ".join(commands))
+    proc = subprocess.run(["kscreen-doctor", *commands], text=True)
+    return proc.returncode
+
+
+def retry_kscreen(commands, label: str):
+    last = 1
+    for attempt in range(1, RETRIES + 1):
+        last = run_kscreen(commands)
+        if last == 0:
+            return 0
+        log(f"{label} failed with exit {last}; retry {attempt}/{RETRIES}")
+        time.sleep(RETRY_SLEEP)
+    return last
+
+
+def ydotool_move_from_top_left(x: int, y: int) -> bool:
+    if shutil.which("ydotool") is None:
+        log("cursor move skipped: ydotool is not installed")
+        return False
+
+    steps = [
+        ["ydotool", "mousemove", "--", "-100000", "-100000"],
+        ["ydotool", "mousemove", "--", str(x), str(y)],
+    ]
+
+    for args in steps:
+        result = subprocess.run(
+            args,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        if result.returncode != 0:
+            log(
+                "cursor move failed: "
+                + (result.stdout.strip() or "ydotool returned an error")
+            )
+            return False
+        time.sleep(0.15)
+
+    return True
+
+
+def move_cursor_to_output(output, label: str, local: bool = False) -> None:
+    geometry = output.get("geometry", "")
+    center = local_center(geometry) if local else global_center(geometry)
+
+    if not center:
+        log(
+            f"cursor move skipped: no geometry for {label} "
+            f"output {output.get('name', '')}"
+        )
+        return
+
+    x, y = center
+    scope = "local" if local else "global"
+    log(
+        f"moving cursor to {label} output {output['name']} "
+        f"{scope} center {x},{y}"
+    )
+    ydotool_move_from_top_left(x, y)
+
+
+def save_state(target: str) -> None:
+    if STATE_FILE.exists():
+        log(f"using existing saved state at {STATE_FILE}")
+        return
+
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    outputs = parse_outputs()
+
+    with STATE_FILE.open("w", encoding="utf-8") as stream:
+        stream.write(f"{META_TARGET}{target}\n")
+        for output in outputs:
+            stream.write(
+                "|".join(
+                    [
+                        output["name"],
+                        output["enabled"],
+                        output["connected"],
+                        output["priority"],
+                        output["geometry"],
+                    ]
+                )
+                + "\n"
+            )
+
+    log(f"saved KScreen state to {STATE_FILE}")
+
+
+def read_state():
+    target = ""
+    outputs = []
+
+    if not STATE_FILE.exists():
+        return target, outputs
+
+    for line in STATE_FILE.read_text(encoding="utf-8").splitlines():
+        if line.startswith(META_TARGET):
+            target = line[len(META_TARGET) :]
+            continue
+
+        parts = line.split("|")
+        if len(parts) < 4:
+            continue
+
+        outputs.append(
+            {
+                "name": parts[0],
+                "enabled": parts[1],
+                "connected": parts[2],
+                "priority": parts[3],
+                "geometry": parts[4] if len(parts) > 4 else "",
+            }
+        )
+
+    return target, outputs
+
+
+def physical_restore_commands(saved_outputs, target: str):
+    current_names = {output["name"] for output in parse_outputs()}
+    restore_commands = []
+    priority_commands = []
+
+    for output in saved_outputs:
+        name = output["name"]
+
+        if name not in current_names:
+            log(f"saved output {name} is no longer present; skipping")
+            continue
+
+        if target and name == target:
+            continue
+
+        if output["enabled"] == "enabled":
+            restore_commands.append(f"output.{name}.enable")
+            if output["priority"]:
+                priority_commands.append(
+                    f"output.{name}.priority.{output['priority']}"
+                )
+        elif output["enabled"] == "disabled":
+            restore_commands.append(f"output.{name}.disable")
+
+    return restore_commands, priority_commands
+
+
+def wait_for_primary_restored(saved_outputs, target: str):
+    saved_primary = primary_from_outputs(saved_outputs, target)
+    if not saved_primary:
+        return None
+
+    for attempt in range(1, RETRIES + 1):
+        current_outputs = parse_outputs()
+        current_primary = output_by_name(
+            current_outputs,
+            saved_primary["name"],
+        )
+
+        if (
+            current_primary
+            and current_primary["enabled"] == "enabled"
+            and current_primary["connected"] == "connected"
+            and current_primary.get("priority") == saved_primary.get("priority")
+        ):
+            log(
+                "primary restore verified: "
+                f"{current_primary['name']} priority "
+                f"{current_primary['priority']}"
+            )
+            return current_primary
+
+        log(f"waiting for primary restore verification {attempt}/{RETRIES}")
+        time.sleep(RETRY_SLEEP)
+
+    current_outputs = parse_outputs()
+    return (
+        output_by_name(current_outputs, saved_primary["name"])
+        or saved_primary
+    )
+
+
+def print_status() -> None:
+    log("current outputs:")
+    for output in parse_outputs():
+        priority = (
+            f" priority={output['priority']}"
+            if output["priority"]
+            else ""
+        )
+        geometry = (
+            f" geometry={output['geometry']}"
+            if output["geometry"]
+            else ""
+        )
+        print(
+            f"{output['name']} {output['enabled']} "
+            f"{output['connected']}{priority}{geometry}"
+        )
+
+    target, saved_outputs = read_state()
+    if saved_outputs:
+        target_text = f" target={target}" if target else ""
+        log(f"saved state exists at {STATE_FILE}{target_text}")
+    else:
+        log(f"no saved state at {STATE_FILE}")
+
+
+def apply_layout(target: str) -> int:
+    if not target:
+        log("apply requires a target output name")
+        return 2
+
+    save_state(target)
+    outputs = parse_outputs()
+
+    commands = []
+    for output in outputs:
+        if output["connected"] != "connected":
+            continue
+
+        name = output["name"]
+        if name == target:
+            commands.append(f"output.{name}.enable")
+        elif output["enabled"] == "enabled":
+            commands.append(f"output.{name}.disable")
+
+    log("applying stream layout: " + " ".join(commands))
+    ret = retry_kscreen(commands, "apply stream layout")
+
+    time.sleep(0.75)
+
+    current_outputs = parse_outputs()
+    target_output = output_by_name(current_outputs, target)
+    if target_output and target_output["enabled"] == "enabled":
+        move_cursor_to_output(target_output, "stream", local=True)
+    else:
+        log(f"cursor move skipped: stream output {target} is not enabled")
+
+    return ret
+
+
+def staged_restore(settle_first: bool) -> int:
+    target, saved_outputs = read_state()
+    if not saved_outputs:
+        log(f"no saved state at {STATE_FILE}")
+        return 0
+
+    if settle_first:
+        log(
+            "post-disconnect supervisor waiting "
+            f"{SETTLE_SECONDS:g}s for Apollo/PipeWire teardown"
+        )
+        time.sleep(SETTLE_SECONDS)
+
+    restore_commands, priority_commands = physical_restore_commands(
+        saved_outputs,
+        target,
+    )
+
+    log("stage 1: restoring physical outputs only")
+    ret = retry_kscreen(
+        restore_commands,
+        "restore physical outputs",
+    )
+
+    time.sleep(0.75)
+
+    if priority_commands:
+        log("stage 2: restoring primary/display priority")
+        priority_ret = retry_kscreen(
+            priority_commands,
+            "restore priority",
+        )
+        if ret == 0:
+            ret = priority_ret
+
+    log("stage 2 check: verifying restored primary display")
+    primary = wait_for_primary_restored(saved_outputs, target)
+
+    log("stage 2 wait: waiting 2s before moving cursor")
+    time.sleep(2)
+
+    if primary:
+        current_outputs = parse_outputs()
+        current_primary = (
+            output_by_name(current_outputs, primary["name"])
+            or primary
+        )
+        if (
+            not current_primary.get("geometry")
+            and primary.get("geometry")
+        ):
+            current_primary["geometry"] = primary["geometry"]
+        move_cursor_to_output(
+            current_primary,
+            "restored primary",
+            local=False,
+        )
+    else:
+        log("cursor move skipped: no saved primary output")
+
+    log(
+        "stage 3 wait: waiting "
+        f"{AFTER_PRIMARY_SECONDS:g}s before disabling virtual output"
+    )
+    time.sleep(AFTER_PRIMARY_SECONDS)
+
+    if target:
+        current_outputs = parse_outputs()
+        if output_by_name(current_outputs, target):
+            log("stage 3: disabling virtual stream output")
+            virtual_ret = retry_kscreen(
+                [f"output.{target}.disable"],
+                "disable virtual output",
+            )
+            if ret == 0:
+                ret = virtual_ret
+        else:
+            log(f"stage 3 skipped: virtual output {target} is not present")
+
+    if ret == 0:
+        try:
+            STATE_FILE.unlink()
+            log(f"removed saved state {STATE_FILE}")
+        except FileNotFoundError:
+            pass
+    else:
+        log("restore failed; keeping saved state for retry")
+
+    return ret
+
+
+def restore_layout() -> int:
+    return staged_restore(settle_first=False)
+
+
+def post_disconnect_restore() -> int:
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+
+    try:
+        fd = os.open(
+            LOCK_FILE,
+            os.O_CREAT | os.O_EXCL | os.O_WRONLY,
+            0o600,
+        )
+        os.write(fd, str(os.getpid()).encode())
+        os.close(fd)
+    except FileExistsError:
+        log(
+            "post-disconnect supervisor already running "
+            f"or stale lock exists at {LOCK_FILE}"
+        )
+        return 0
+
+    try:
+        return staged_restore(settle_first=True)
+    finally:
+        try:
+            LOCK_FILE.unlink()
+        except FileNotFoundError:
+            pass
+
+
+def main() -> int:
+    action = sys.argv[1] if len(sys.argv) > 1 else "status"
+
+    if action == "status":
+        print_status()
+        return 0
+    if action == "apply":
+        target = sys.argv[2] if len(sys.argv) > 2 else ""
+        return apply_layout(target)
+    if action == "restore":
+        return restore_layout()
+    if action == "post-disconnect":
+        return post_disconnect_restore()
+
+    log(f"unknown action: {action}")
+    log(
+        "usage: apollo-kscreen-stream-monitors "
+        "{status|apply OUTPUT|restore|post-disconnect}"
+    )
+    return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

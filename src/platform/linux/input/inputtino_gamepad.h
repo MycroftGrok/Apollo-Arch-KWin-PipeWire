@@ -20,7 +20,8 @@ namespace platf::gamepad {
   enum ControllerType {
     XboxOneWired,  ///< Xbox One Wired Controller
     DualSenseWired,  ///< DualSense Wired Controller
-    SwitchProWired  ///< Switch Pro Wired Controller
+    SwitchProWired,  ///< Switch Pro Wired Controller
+    SteamControllerWired  ///< Valve Steam Controller
   };
 
   int alloc(input_raw_t *raw, const gamepad_id_t &id, const gamepad_arrival_t &metadata, feedback_queue_t feedback_queue);

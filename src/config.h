@@ -88,6 +88,7 @@ namespace config {
     std::string adapter_name;
     std::string output_name;
     std::string preserve_physical_display;
+    bool kwin_virtual_display_client_override;
 
     struct dd_t {
       struct workarounds_t {

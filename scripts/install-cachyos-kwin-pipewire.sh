@@ -194,3 +194,35 @@ printf '%s\n' \
   "Verify with:" \
   "  kscreen-doctor -o | grep -A12 -E 'Virtual-apollo|apollo-test|Output:'" \
   "  journalctl --user -u apollo -n 160 --no-pager | grep -E 'KWin capture output|Initial capture display requested|kwingrab|pipewire|Virtual-apollo|Streaming display'"
+
+# BEGIN WORKING APOLLO DISPLAY LIFECYCLE
+#
+# Install the proven KScreen stream lifecycle:
+#   connected    -> only the selected streaming output is enabled
+#   disconnected -> physical outputs are restored, then the virtual output is disabled
+#
+APOLLO_INSTALL_SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+APOLLO_INSTALL_REPO_ROOT="$(CDPATH= cd -- "${APOLLO_INSTALL_SCRIPT_DIR}/.." && pwd)"
+
+install -Dm755 \
+  "${APOLLO_INSTALL_REPO_ROOT}/scripts/systemd-user/apollo-display-mode" \
+  "${HOME}/.local/bin/apollo-display-mode"
+
+sudo install -Dm755 \
+  "${APOLLO_INSTALL_REPO_ROOT}/scripts/systemd-user/apollo-kscreen-stream-monitors" \
+  /usr/local/bin/apollo-kscreen-stream-monitors
+
+# Apollo must receive the built assets, not the source asset directory.
+if [ -d "${APOLLO_INSTALL_REPO_ROOT}/cmake-build-debug/assets" ]; then
+  sudo rm -rf /usr/local/assets
+  sudo install -d /usr/local/assets
+  sudo cp -a \
+    "${APOLLO_INSTALL_REPO_ROOT}/cmake-build-debug/assets/." \
+    /usr/local/assets/
+fi
+
+# Establish the safe idle state when KScreen is available.
+if command -v kscreen-doctor >/dev/null 2>&1; then
+  "${HOME}/.local/bin/apollo-display-mode" disconnect || true
+fi
+# END WORKING APOLLO DISPLAY LIFECYCLE

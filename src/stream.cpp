@@ -602,11 +602,11 @@ namespace stream {
           break;
         case ENET_EVENT_TYPE_CONNECT:
           BOOST_LOG(info) << "CLIENT CONNECTED"sv;
-          std::system(R"(if [ -x "$HOME/.local/bin/apollo-display-mode" ]; then "$HOME/.local/bin/apollo-display-mode" connect >/dev/null 2>&1 & fi)");
+          std::system(R"(if [ -x "$HOME/.local/bin/apollo-display-mode" ]; then systemd-run --user --collect --quiet -- "$HOME/.local/bin/apollo-display-mode" connect >/dev/null 2>&1; fi)");
           break;
         case ENET_EVENT_TYPE_DISCONNECT:
           BOOST_LOG(info) << "CLIENT DISCONNECTED"sv;
-          std::system(R"(if [ -x "$HOME/.local/bin/apollo-display-mode" ]; then "$HOME/.local/bin/apollo-display-mode" disconnect >/dev/null 2>&1 & fi)");
+          std::system(R"(if [ -x "$HOME/.local/bin/apollo-display-mode" ]; then systemd-run --user --collect --quiet -- "$HOME/.local/bin/apollo-display-mode" disconnect >/dev/null 2>&1; fi)");
           // No more clients to send video data to ^_^
           if (session->state == session::state_e::RUNNING) {
             session::stop(*session);

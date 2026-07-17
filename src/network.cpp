@@ -4,7 +4,12 @@
  */
 // standard includes
 #include <algorithm>
+#include <cerrno>
 #include <sstream>
+
+#ifndef _WIN32
+  #include <fcntl.h>
+#endif
 
 // local includes
 #include "config.h"
@@ -165,6 +170,20 @@ namespace net {
 
     // Maximum of 128 clients, which should be enough for anyone
     auto host = host_t {enet_host_create(af == IPV4 ? AF_INET : AF_INET6, &addr, 128, 0, 0, 0)};
+
+    // enet_host_create() returns nullptr when the socket cannot be created or bound.
+    if (!host) {
+      return {};
+    }
+
+#ifndef _WIN32
+    // Prevent launched helper processes from inheriting and retaining the control socket.
+    const auto fd_flags = fcntl(host->socket, F_GETFD);
+    if (fd_flags == -1 || fcntl(host->socket, F_SETFD, fd_flags | FD_CLOEXEC) == -1) {
+      BOOST_LOG(error) << "Failed to mark ENet control socket close-on-exec: "sv << errno;
+      return {};
+    }
+#endif
 
     // Enable opportunistic QoS tagging (automatically disables if the network appears to drop tagged packets)
     enet_socket_set_option(host->socket, ENET_SOCKOPT_QOS, 1);
