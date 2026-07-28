@@ -586,6 +586,7 @@ namespace config {
     true, // enable_discovery
     false, // envvar_compatibility_mode
     true, // moondeck_buddy
+    true, // start_on_boot
     "en",  // locale
     2,  // min_log_level
     0,  // flags
@@ -1304,6 +1305,7 @@ namespace config {
     bool_f(vars, "enable_discovery", sunshine.enable_discovery);
     bool_f(vars, "envvar_compatibility_mode", sunshine.envvar_compatibility_mode);
     bool_f(vars, "moondeck_buddy", sunshine.moondeck_buddy);
+    bool_f(vars, "start_on_boot", sunshine.start_on_boot);
     bool_f(vars, "notify_pre_releases", sunshine.notify_pre_releases);
     bool_f(vars, "legacy_ordering", sunshine.legacy_ordering);
     bool_f(vars, "forward_rumble", input.forward_rumble);

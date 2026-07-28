@@ -264,6 +264,7 @@ namespace config {
     bool enable_discovery;
     bool envvar_compatibility_mode;
     bool moondeck_buddy;
+    bool start_on_boot;
     std::string locale;
     int min_log_level;
     std::bitset<flag::FLAG_SIZE> flags;

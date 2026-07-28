@@ -182,9 +182,11 @@ EOF2
 say "Installing MoonDeck Buddy integration"
 "$REPO_ROOT/scripts/install-moondeck-buddy-support.sh" --no-restart
 
-say "Reloading and enabling user services"
+say "Installing Apollo start-with-OS integration"
+"$REPO_ROOT/scripts/install-apollo-start-on-boot-support.sh" --no-start
+
+say "Reloading user services"
 systemctl --user daemon-reload
-systemctl --user enable apollo
 systemctl --user set-environment KWIN_WAYLAND_NO_PERMISSION_CHECKS=1 || true
 dbus-update-activation-environment --systemd KWIN_WAYLAND_NO_PERMISSION_CHECKS || true
 

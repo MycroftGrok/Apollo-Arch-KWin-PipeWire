@@ -464,7 +464,9 @@
     "wan_encryption_mode_2": "Required for all clients",
     "wan_encryption_mode_desc": "This determines when encryption will be used when streaming over the Internet. Encryption can reduce streaming performance, particularly on less powerful hosts and clients.",
     "moondeck_buddy": "Keep MoonDeck Buddy running with Apollo",
-    "moondeck_buddy_desc": "Automatically start MoonDeck Buddy when Apollo starts, restart it if it exits, and stop it when Apollo stops."
+    "moondeck_buddy_desc": "Automatically start MoonDeck Buddy when Apollo starts, restart it if it exits, and stop it when Apollo stops.",
+    "start_on_boot": "Start Apollo with OS",
+    "start_on_boot_desc": "Automatically start Apollo when the KDE desktop session is ready after boot. Uncheck this to require manual startup on the next sign-in or reboot."
   },
   "login": {
     "save_password": "Remember Password"

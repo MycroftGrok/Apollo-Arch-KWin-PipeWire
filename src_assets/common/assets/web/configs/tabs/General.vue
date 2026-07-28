@@ -205,6 +205,15 @@ onMounted(() => {
       </button>
     </div>
 
+    <!-- Start Apollo with OS -->
+    <Checkbox v-if="platform === 'linux'"
+              class="mb-3"
+              id="start_on_boot"
+              locale-prefix="config"
+              v-model="config.start_on_boot"
+              default="true"
+    ></Checkbox>
+
     <!-- Enable Pairing -->
     <Checkbox class="mb-3"
               id="enable_pairing"

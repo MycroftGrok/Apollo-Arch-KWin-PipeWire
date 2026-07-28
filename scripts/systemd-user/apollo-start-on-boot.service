@@ -1,0 +1,12 @@
+[Unit]
+Description=Start Apollo with OS when enabled in Apollo configuration
+Documentation=https://github.com/MycroftGrok/Apollo-Arch-KWin-PipeWire
+After=graphical-session.target
+ConditionPathExists=/usr/bin/apollo
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/apollo-start-on-boot run
+
+[Install]
+WantedBy=graphical-session.target

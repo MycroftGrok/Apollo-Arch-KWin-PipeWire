@@ -346,3 +346,68 @@ systemctl --user status apollo-moondeck-buddy.service --no-pager
 
 MoonDeck Buddy stores its Linux settings under `~/.config/moondeckbuddy`.
 Initial pairing should be completed while a KDE desktop session is available.
+
+## Start Apollo with OS
+
+The **General** configuration page contains **Start Apollo with OS**. The option
+is enabled by default.
+
+Apollo depends on the KDE graphical session, KWin, PipeWire, and the user D-Bus
+session. Therefore, "with OS" means that Apollo starts automatically when the
+KDE graphical session is ready after boot. On an auto-login CachyOS system this
+occurs automatically during boot.
+
+The implementation installs and enables:
+
+```text
+~/.config/systemd/user/apollo-start-on-boot.service
+```
+
+That policy service runs:
+
+```text
+~/.local/bin/apollo-start-on-boot
+```
+
+The helper reads `start_on_boot` from:
+
+```text
+~/.config/sunshine/sunshine.conf
+```
+
+A missing setting is treated as enabled, matching the checked-by-default web
+configuration. When enabled, the policy starts `apollo.service`. When disabled,
+it exits without starting Apollo.
+
+The direct `apollo.service` autostart symlink is disabled intentionally. This
+prevents stale systemd enablement from bypassing an unchecked checkbox. Apollo
+can still be started manually:
+
+```fish
+systemctl --user start apollo.service
+```
+
+### Install or repair automatic startup only
+
+```fish
+cd ~/Apollo-Linux
+
+scripts/install-apollo-start-on-boot-support.sh \
+    --no-start
+```
+
+This installs and enables the startup policy without stopping or restarting the
+currently running Apollo process and without touching the KWin virtual-monitor
+service.
+
+### Verification
+
+```fish
+~/.local/bin/apollo-start-on-boot status
+
+systemctl --user is-enabled \
+    apollo-start-on-boot.service
+```
+
+Changing the checkbox controls the next KDE graphical-session startup. It does
+not stop the current Apollo process.
