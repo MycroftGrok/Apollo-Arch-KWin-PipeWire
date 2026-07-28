@@ -1,0 +1,17 @@
+[Unit]
+Description=MoonDeck Buddy managed by Apollo
+Documentation=https://github.com/FrogTheFrog/moondeck-buddy
+PartOf=apollo.service
+After=apollo.service graphical-session.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecCondition=%h/.local/bin/apollo-moondeck-buddy enabled
+ExecStart=%h/.local/bin/apollo-moondeck-buddy run
+Restart=always
+RestartSec=2
+TimeoutStopSec=10
+
+[Install]
+WantedBy=default.target

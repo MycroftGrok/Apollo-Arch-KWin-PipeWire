@@ -31,6 +31,14 @@
         "setsid steam steam://open/bigpicture"
       ],
       "image-path": "steam.png"
+    },
+    {
+      "name": "MoonDeckStream",
+      "cmd": "MoonDeckStream",
+      "image-path": "steam.png",
+      "auto-detach": false,
+      "wait-all": false,
+      "allow-client-commands": false
     }
   ]
 }

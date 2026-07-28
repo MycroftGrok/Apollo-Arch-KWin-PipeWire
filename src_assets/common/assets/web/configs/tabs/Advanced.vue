@@ -50,6 +50,14 @@ const config = ref(props.config)
               default="false"
     ></Checkbox>
 
+    <!-- MoonDeck Buddy lifecycle -->
+    <Checkbox class="mb-3"
+              id="moondeck_buddy"
+              locale-prefix="config"
+              v-model="config.moondeck_buddy"
+              default="true"
+    ></Checkbox>
+
     <!-- Legacy ordering -->
     <Checkbox class="mb-3"
               id="legacy_ordering"

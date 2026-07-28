@@ -263,6 +263,7 @@ namespace config {
     bool enable_pairing;
     bool enable_discovery;
     bool envvar_compatibility_mode;
+    bool moondeck_buddy;
     std::string locale;
     int min_log_level;
     std::bitset<flag::FLAG_SIZE> flags;

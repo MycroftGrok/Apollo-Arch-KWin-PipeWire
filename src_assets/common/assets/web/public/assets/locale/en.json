@@ -307,7 +307,7 @@
     "install_steam_audio_drivers": "Install Steam Audio Drivers",
     "install_steam_audio_drivers_desc": "If Steam is installed, this will automatically install the Steam Streaming Speakers driver to support 5.1/7.1 surround sound and muting host audio.",
     "isolated_virtual_display_option": "Move the Virtual Display to the bottom right-most corner of the display layout",
-    "isolated_virtual_display_option_desc": "This makes the display isolated from all other display and contains mouse movements to the virtual screen. This reorganizes the displays such that the all other displays are to the left of the virtual display.",	
+    "isolated_virtual_display_option_desc": "This makes the display isolated from all other display and contains mouse movements to the virtual screen. This reorganizes the displays such that the all other displays are to the left of the virtual display.",
     "keep_sink_default": "Keep virtual sink as default",
     "keep_sink_default_desc": "Whether to force selected virtual sink as default (effective when host audio output is disabled).",
     "key_repeat_delay": "Key Repeat Delay",
@@ -462,7 +462,9 @@
     "wan_encryption_mode": "WAN Encryption Mode",
     "wan_encryption_mode_1": "Enabled for supported clients (default)",
     "wan_encryption_mode_2": "Required for all clients",
-    "wan_encryption_mode_desc": "This determines when encryption will be used when streaming over the Internet. Encryption can reduce streaming performance, particularly on less powerful hosts and clients."
+    "wan_encryption_mode_desc": "This determines when encryption will be used when streaming over the Internet. Encryption can reduce streaming performance, particularly on less powerful hosts and clients.",
+    "moondeck_buddy": "Keep MoonDeck Buddy running with Apollo",
+    "moondeck_buddy_desc": "Automatically start MoonDeck Buddy when Apollo starts, restart it if it exits, and stop it when Apollo stops."
   },
   "login": {
     "save_password": "Remember Password"

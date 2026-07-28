@@ -301,3 +301,48 @@ scripts/systemd-user/apollo-kscreen-stream-monitors
 
 The annotated `working-apollo-*` Git tag records the complete known-good Apollo
 tree, including the exact Inputtino submodule commit.
+
+
+## MoonDeck Buddy integration
+
+Apollo can install and manage MoonDeck Buddy as a user service. The **Advanced**
+configuration page contains **Keep MoonDeck Buddy running with Apollo**, enabled
+by default.
+
+When enabled, starting Apollo pulls in `apollo-moondeck-buddy.service`. The
+service launches `MoonDeckBuddy` with `NO_GUI=auto`, restarts it if it exits,
+and stops it when Apollo stops. Applying a changed checkbox value restarts
+Apollo, so the service state is reevaluated immediately.
+
+The installer uses the Arch AUR package `moondeckbuddy-appimage`, disables
+Buddy's independent autostart units to prevent duplicate processes, and adds a
+`MoonDeckStream` application whose command is `MoonDeckStream`. **Continue
+streaming if the application exits quickly** is disabled, as required by
+MoonDeck Buddy's Sunshine setup.
+
+To install or repair only the MoonDeck integration:
+
+```fish
+cd ~/Apollo-Linux
+scripts/install-moondeck-buddy-support.sh
+```
+
+This installs:
+
+```text
+~/.local/bin/apollo-moondeck-buddy
+~/.config/systemd/user/apollo-moondeck-buddy.service
+~/.config/systemd/user/apollo.service.d/20-moondeck-buddy.conf
+```
+
+Verify with:
+
+```fish
+command -v MoonDeckBuddy
+command -v MoonDeckStream
+~/.local/bin/apollo-moondeck-buddy status
+systemctl --user status apollo-moondeck-buddy.service --no-pager
+```
+
+MoonDeck Buddy stores its Linux settings under `~/.config/moondeckbuddy`.
+Initial pairing should be completed while a KDE desktop session is available.

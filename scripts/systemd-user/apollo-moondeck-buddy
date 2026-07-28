@@ -1,0 +1,83 @@
+#!/bin/sh
+set -eu
+
+CONFIG_FILE="${XDG_CONFIG_HOME:-${HOME}/.config}/sunshine/sunshine.conf"
+
+setting_value() {
+  [ -f "$CONFIG_FILE" ] || return 0
+
+  sed -nE \
+    's/^[[:space:]]*moondeck_buddy[[:space:]]*=[[:space:]]*([^#]*).*$/\1/p' \
+    "$CONFIG_FILE" \
+    | tail -n 1 \
+    | tr '[:upper:]' '[:lower:]' \
+    | tr -d '"[:space:]'
+}
+
+is_enabled() {
+  value="$(setting_value || true)"
+
+  case "$value" in
+    0|false|no|off|disable|disabled)
+      return 1
+      ;;
+    *)
+      # Missing setting is intentionally enabled by default.
+      return 0
+      ;;
+  esac
+}
+
+find_buddy() {
+  if command -v MoonDeckBuddy >/dev/null 2>&1; then
+    command -v MoonDeckBuddy
+    return 0
+  fi
+
+  if command -v moondeckbuddy >/dev/null 2>&1; then
+    command -v moondeckbuddy
+    return 0
+  fi
+
+  return 1
+}
+
+case "${1:-}" in
+  enabled)
+    is_enabled
+    ;;
+
+  run)
+    if ! is_enabled; then
+      exit 0
+    fi
+
+    buddy="$(find_buddy || true)"
+    if [ -z "$buddy" ]; then
+      echo "MoonDeck Buddy executable was not found." >&2
+      exit 127
+    fi
+
+    exec env NO_GUI="${MOONDECK_BUDDY_NO_GUI:-auto}" "$buddy"
+    ;;
+
+  status)
+    if is_enabled; then
+      echo "Apollo MoonDeck Buddy integration: enabled"
+    else
+      echo "Apollo MoonDeck Buddy integration: disabled"
+    fi
+
+    buddy="$(find_buddy || true)"
+    if [ -n "$buddy" ]; then
+      echo "MoonDeck Buddy executable: $buddy"
+    else
+      echo "MoonDeck Buddy executable: not found"
+    fi
+    ;;
+
+  *)
+    echo "Usage: $0 enabled|run|status" >&2
+    exit 2
+    ;;
+esac

@@ -88,7 +88,7 @@ command -v ydotoold >/dev/null 2>&1 || fail "ydotoold was not found after packag
 command -v kdotool >/dev/null 2>&1 || fail "kdotool was not found after install."
 
 say "Building Apollo"
-rm -rf cmake-build-debug pkg
+rm -rf cmake-build-debug pkg src_assets/common/assets/web/node_modules/.vite
 
 cmake -S . -B cmake-build-debug -G Ninja \
   -DCMAKE_BUILD_TYPE=Release \
@@ -178,6 +178,9 @@ After=apollo-kwin-virtual-monitor.service
 [Service]
 ExecStartPre=/usr/bin/sleep 3
 EOF2
+
+say "Installing MoonDeck Buddy integration"
+"$REPO_ROOT/scripts/install-moondeck-buddy-support.sh" --no-restart
 
 say "Reloading and enabling user services"
 systemctl --user daemon-reload
