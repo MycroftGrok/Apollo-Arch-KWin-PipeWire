@@ -1,34 +1,34 @@
-# Apollo Linux
+# Apollo with Virtual Displays for Linux(Arch)
 
 > **Fork of [Apollo](https://github.com/ClassicOldSong/Apollo) with Linux Virtual Display support**
 
-Apollo is a self-hosted desktop stream host for [Artemis(Moonlight Noir)](https://github.com/ClassicOldSong/moonlight-android). Offering low latency, native client resolution, cloud gaming server capabilities with support for AMD, Intel, and Nvidia GPUs for hardware encoding. Software encoding is also available. A web UI is provided to allow configuration and client pairing from your favorite web browser. Pair from the local server or any mobile device.
+Apollo is a self-hosted desktop stream host for [Artemis(Moonlight Noir)](https://github.com/ClassicOldSong/moonlight-android). Offering low latency, native client resolution, cloud gaming server capabilities with support for AMD, Intel, and Nvidia GPUs for hardware encoding. Software encoding is also available. A web UI is provided to allow configuration and client pairing from your favorite web browser. Pair from the local server or any mobile device. This version of Apollo has improvements over the base build. Some of the issues with the Linux version of Apollo have been fixed and new options have also been added.
 
 Major features:
 
-- [x] Built-in Virtual Display with HDR support that matches the resolution/framerate config of your client automatically
-- [x] **Linux Virtual Display support using EVDI** *(new in this fork!)*
-- [x] Permission management for clients
-- [x] Clipboard sync
-- [x] Commands for client connection/disconnection (checkout [Auto pause/resume games](https://github.com/ClassicOldSong/Apollo/wiki/Auto-pause-resume-games))
-- [x] Input only mode
+- [x] Built-in Virtual Display with HDR support that matches the resolution/framerate config of your client automatically **STILL A WORK IN PROGRESS**
+- [x] **Linux Virtual Display support using KWIN** *(new in this fork!)*
+- [x] GUI Configuration page now directly reads/writes to Apollo configs.
+- [x] Local monitors turn off when Artemis is connected.
+- [x] Virtual monitor remains disabled when there is not sa connection. When connected all local monitors are disabled and the virtual display is enabled
+- [x] Mouse cursor control - Mouse cursor now moves to virtual display when connected and back the it's original position when the connection is terminated
 
 ## Linux Virtual Display Support
 
-This fork adds **real virtual display support for Linux** using [EVDI](https://github.com/DisplayLink/evdi) (Extensible Virtual Display Interface). 
+This fork adds **real virtual display support for Linux** using [KWIN](https://github.com/KDE/kwin) (Now works with KDE just like in the windows release). 
 
 ### Features
 - Creates isolated virtual displays that don't mirror your physical monitor
 - Supports resolutions up to 4K (3840x2160)
-- Dynamic loading of EVDI library (no hard dependency)
-- Automatic EVDI module loading on boot
+- Dynamic loading of KWIN library (no hard dependency)
+- Automatic KWIN module loading on boot
 - Works with AMD, Intel, and Nvidia GPUs via VAAPI
 
-### Requirements
-- `evdi-dkms` package (for the kernel module)
-- `libevdi` library
+### Requirements (Required repositories, files, utilites and etc)
+- 
+- 
 
-### Installation on Arch/CachyOS
+### Installation on Arch Linux (CachyOS was the OS used for all testing)
 
 ```bash
 # Install EVDI
