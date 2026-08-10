@@ -2,11 +2,12 @@
 # Apollo - Game streaming server with virtual display support
 
 pkgname=apollo
-pkgver=0.1.0
+epoch=1000
+pkgver=0.1.0.kwinpipewire.r0.g00000000
 pkgrel=1
 pkgdesc="Self-hosted game streaming server with virtual display support"
 arch=('x86_64')
-url='https://github.com/ClassicOldSong/Apollo'
+url="https://github.com/MycroftGrok/Apollo-Arch-KWin-PipeWire"
 license=('GPL-3.0-only')
 install=apollo.install
 
@@ -44,6 +45,11 @@ conflicts=('sunshine')
 # Usar o build local já compilado
 source=()
 sha256sums=()
+
+pkgver() {
+    cd "${startdir}"
+    printf "0.1.0.kwinpipewire.r%s.g%s"         "$(git rev-list --count HEAD)"         "$(git rev-parse --short=8 HEAD)"
+}
 
 package() {
     # Copiar do build debug
