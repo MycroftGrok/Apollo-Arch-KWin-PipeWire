@@ -3,7 +3,7 @@
 
 pkgname=apollo
 epoch=1000
-pkgver=0.1.0.kwinpipewire.r0.g00000000
+pkgver=0.1.0.kwinpipewire.r3359.gc4847932
 pkgrel=1
 pkgdesc="Self-hosted game streaming server with virtual display support"
 arch=('x86_64')
