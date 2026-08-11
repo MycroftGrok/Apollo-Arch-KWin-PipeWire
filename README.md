@@ -28,7 +28,47 @@ This fork adds **real virtual display support for Linux** using [KWIN](https://g
 - 
 - 
 
-### Installation on Arch Linux (CachyOS was the OS used for all testing)
+#### Protecting the custom Apollo package from CachyOS/Arch upgrades
+
+This fork intentionally uses a protected Arch package version so a normal
+CachyOS or Arch system update does not replace the custom KWin/PipeWire Apollo
+build with the repository version of Apollo.
+
+The `PKGBUILD` uses:
+
+```text
+epoch=1000
+```
+
+Pacman compares the package epoch before `pkgver` and `pkgrel`. Because normal
+repository Apollo packages are epochless, this custom package remains newer
+from Pacmans point of view even when the upstream Apollo version number
+increases.
+
+The `pkgver()` function also includes the Git revision in each locally built
+package version. This makes it possible to identify exactly which revision of
+this fork produced the installed package.
+
+For example:
+
+```text
+1000:0.1.0.kwinpipewire.r1234.gabcdef12-1
+```
+
+Do not remove `epoch=1000` unless you intentionally want CachyOS or Arch to
+replace this custom Apollo package with its repository build.
+
+`IgnorePkg` is not required. Normal system updates can continue with:
+
+```bash
+sudo pacman -Syu
+```
+
+Apollo itself should be updated by pulling the latest version of this
+repository, rebuilding it using the installation procedure below, and
+installing the resulting package with `pacman -U`.
+
+## Installation on Arch Linux (CachyOS was the OS used for all testing)
 
 ```bash
 # Install EVDI
