@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import json
 import os
 import re
 import shutil
@@ -38,6 +39,18 @@ def run(args: list[str], check: bool = False) -> subprocess.CompletedProcess:
 def doctor_output() -> str:
     result = run(["kscreen-doctor", "-o"], check=True)
     return ANSI_RE.sub("", result.stdout)
+
+
+def doctor_json():
+    result = run(["kscreen-doctor", "--json"], check=True)
+    return json.loads(result.stdout)
+
+
+def json_output_by_name(name: str):
+    for output in doctor_json().get("outputs", []):
+        if output.get("name") == name:
+            return output
+    return None
 
 
 def parse_geometry(value: str):
@@ -319,6 +332,131 @@ def wait_for_primary_restored(saved_outputs, target: str):
     )
 
 
+def configure_mode(
+    target: str,
+    width_text: str,
+    height_text: str,
+    refresh_mhz_text: str,
+) -> int:
+    try:
+        width = int(width_text)
+        height = int(height_text)
+        refresh_mhz = int(refresh_mhz_text)
+    except ValueError:
+        log("configure mode requires integer WIDTH HEIGHT REFRESH_MHZ")
+        return 2
+
+    if not (320 <= width <= 16384 and 200 <= height <= 16384):
+        log(f"refusing invalid stream resolution {width}x{height}")
+        return 2
+
+    if not (10000 <= refresh_mhz <= 1000000):
+        log(f"refusing invalid stream refresh {refresh_mhz} mHz")
+        return 2
+
+    requested_hz = refresh_mhz / 1000.0
+
+    def closest_mode():
+        output = json_output_by_name(target)
+        if not output:
+            return None
+
+        candidates = []
+        for mode in output.get("modes", []):
+            size = mode.get("size") or {}
+            if (
+                int(size.get("width", 0)) != width
+                or int(size.get("height", 0)) != height
+            ):
+                continue
+
+            try:
+                refresh_hz = float(mode.get("refreshRate", 0.0))
+            except (TypeError, ValueError):
+                continue
+
+            mode_id = str(mode.get("id", ""))
+            if mode_id:
+                candidates.append(
+                    (abs(refresh_hz - requested_hz), refresh_hz, mode_id)
+                )
+
+        if not candidates:
+            return None
+        return min(candidates, key=lambda item: item[0])
+
+    selected = closest_mode()
+
+    if selected is None or selected[0] > 0.5:
+        log(
+            "adding custom stream mode "
+            f"{width}x{height}@{requested_hz:.3f}Hz"
+        )
+        ret = retry_kscreen(
+            [
+                f"output.{target}.addCustomMode."
+                f"{width}.{height}.{refresh_mhz}.full"
+            ],
+            "add custom stream mode",
+        )
+        if ret != 0:
+            return ret
+
+        time.sleep(0.25)
+        selected = closest_mode()
+
+    if selected is None:
+        log(
+            "no matching KScreen mode found after custom mode creation for "
+            f"{width}x{height}@{requested_hz:.3f}Hz"
+        )
+        return 1
+
+    error_hz, actual_hz, mode_id = selected
+    if error_hz > 1.0:
+        log(
+            "closest KScreen mode is too far from requested refresh: "
+            f"requested={requested_hz:.3f}Hz actual={actual_hz:.3f}Hz"
+        )
+        return 1
+
+    log(
+        "selecting stream mode "
+        f"id={mode_id} {width}x{height}@{actual_hz:.3f}Hz "
+        f"(requested {requested_hz:.3f}Hz)"
+    )
+
+    ret = retry_kscreen(
+        [
+            f"output.{target}.mode.{mode_id}",
+            f"output.{target}.scale.1",
+        ],
+        "select stream mode",
+    )
+    if ret != 0:
+        return ret
+
+    time.sleep(0.25)
+    output = json_output_by_name(target)
+    if not output:
+        log(f"stream output {target} disappeared after mode selection")
+        return 1
+
+    current_mode_id = str(output.get("currentModeId", ""))
+    if current_mode_id != mode_id:
+        log(
+            "KScreen did not retain requested stream mode: "
+            f"expected={mode_id} current={current_mode_id}"
+        )
+        return 1
+
+    log(
+        "stream mode configured successfully: "
+        f"{width}x{height}@{actual_hz:.3f}Hz scale=1"
+    )
+    return 0
+
+
 def print_status() -> None:
     log("current outputs:")
     for output in parse_outputs():
@@ -507,6 +645,16 @@ def main() -> int:
     if action == "status":
         print_status()
         return 0
+    if action == "configure":
+        if len(sys.argv) != 6:
+            log("configure requires OUTPUT WIDTH HEIGHT REFRESH_MHZ")
+            return 2
+        return configure_mode(
+            sys.argv[2],
+            sys.argv[3],
+            sys.argv[4],
+            sys.argv[5],
+        )
     if action == "apply":
         target = sys.argv[2] if len(sys.argv) > 2 else ""
         return apply_layout(target)
@@ -518,7 +666,7 @@ def main() -> int:
     log(f"unknown action: {action}")
     log(
         "usage: apollo-kscreen-stream-monitors "
-        "{status|apply OUTPUT|restore|post-disconnect}"
+        "{status|configure OUTPUT WIDTH HEIGHT REFRESH_MHZ|apply OUTPUT|restore|post-disconnect}"
     )
     return 2
 

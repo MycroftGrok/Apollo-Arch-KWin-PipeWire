@@ -16,9 +16,14 @@ case "${1:-}" in
       "$HELPER" post-disconnect >/dev/null 2>&1 || true
     ;;
   configure)
-    # The archived display-state helper does not resize the persistent monitor.
-    # Apollo is already using the configured fixed KWin virtual-display mode.
-    exit 0
+    WIDTH="${2:-}"
+    HEIGHT="${3:-}"
+    REFRESH_MHZ="${4:-60000}"
+    if [ -z "$WIDTH" ] || [ -z "$HEIGHT" ] || [ -z "$REFRESH_MHZ" ]; then
+      echo "Usage: $0 configure WIDTH HEIGHT REFRESH_MHZ" >&2
+      exit 2
+    fi
+    exec "$HELPER" configure "$TARGET" "$WIDTH" "$HEIGHT" "$REFRESH_MHZ"
     ;;
   restore)
     exec "$HELPER" restore
@@ -27,7 +32,7 @@ case "${1:-}" in
     exec "$HELPER" status
     ;;
   *)
-    echo "Usage: $0 connect|disconnect|configure [WIDTH HEIGHT]|restore|status" >&2
+    echo "Usage: $0 connect|disconnect|configure WIDTH HEIGHT REFRESH_MHZ|restore|status" >&2
     exit 2
     ;;
 esac

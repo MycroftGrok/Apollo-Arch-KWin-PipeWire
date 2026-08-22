@@ -1151,9 +1151,39 @@ namespace pipewire {
     }
 
     void query_dmabuf_formats(EGLDisplay egl_display) {
+      using query_dmabuf_formats_fn =
+        EGLBoolean (*)(EGLDisplay, EGLint, EGLint *, EGLint *);
+      using query_dmabuf_modifiers_fn =
+        EGLBoolean (*)(EGLDisplay, EGLint, EGLint, EGLuint64KHR *, EGLBoolean *, EGLint *);
+
+      const auto query_dmabuf_formats =
+        reinterpret_cast<query_dmabuf_formats_fn>(
+          eglGetProcAddress("eglQueryDmaBufFormatsEXT")
+        );
+      const auto query_dmabuf_modifiers =
+        reinterpret_cast<query_dmabuf_modifiers_fn>(
+          eglGetProcAddress("eglQueryDmaBufModifiersEXT")
+        );
+
+      if (!query_dmabuf_formats || !query_dmabuf_modifiers) {
+        BOOST_LOG(info) << "[pipewire] EGL DMA-BUF modifier entry points unavailable; using memory buffers"sv;
+        return;
+      }
+
       EGLint num_dmabuf_formats = 0;
       std::array<EGLint, MAX_DMABUF_FORMATS> dmabuf_formats = {0};
-      num_dmabuf_formats = 0;
+      if (!query_dmabuf_formats(
+            egl_display,
+            MAX_DMABUF_FORMATS,
+            dmabuf_formats.data(),
+            &num_dmabuf_formats
+          )) {
+        BOOST_LOG(warning) << "[pipewire] eglQueryDmaBufFormatsEXT failed; using memory buffers"sv;
+        return;
+      }
+
+      BOOST_LOG(info) << "[pipewire] EGL reports ["sv << num_dmabuf_formats
+                      << "] DMA-BUF formats"sv;
 
       if (num_dmabuf_formats > MAX_DMABUF_FORMATS) {
         BOOST_LOG(warning) << "[pipewire] Some DMA-BUF formats are being ignored"sv;
@@ -1170,7 +1200,18 @@ namespace pipewire {
 
         EGLint num_modifiers = 0;
         std::array<EGLuint64KHR, MAX_DMABUF_MODIFIERS> mods = {0};
-        num_modifiers = 0;
+        if (!query_dmabuf_modifiers(
+              egl_display,
+              fmt.fourcc,
+              MAX_DMABUF_MODIFIERS,
+              mods.data(),
+              nullptr,
+              &num_modifiers
+            )) {
+          BOOST_LOG(debug) << "[pipewire] DMA-BUF modifier query failed for DRM format ["
+                           << fmt.fourcc << ']';
+          continue;
+        }
 
         if (num_modifiers > MAX_DMABUF_MODIFIERS) {
           BOOST_LOG(warning) << "[pipewire] Some DMA-BUF modifiers are being ignored"sv;
@@ -1225,9 +1266,9 @@ namespace pipewire {
         }
       }
 
-      if (false) {
-        query_dmabuf_formats(egl_display.get());
-      }
+      query_dmabuf_formats(egl_display.get());
+      BOOST_LOG(info) << "[pipewire] Advertising ["sv << n_dmabuf_infos
+                      << "] DMA-BUF formats to PipeWire"sv;
 
       return 0;
     }

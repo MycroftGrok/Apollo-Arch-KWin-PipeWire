@@ -243,15 +243,28 @@ namespace proc {
                         << render_width << 'x' << render_height << ']';
       }
 
+      uint32_t target_refresh_mhz = launch_session->fps ? launch_session->fps : 60000;
+      if (target_refresh_mhz < 1000) {
+        target_refresh_mhz *= 1000;
+      }
+      if (config::video.double_refreshrate) {
+        target_refresh_mhz *= 2;
+      }
+
+      BOOST_LOG(info) << "Configuring KWin virtual-display mode ["
+                      << render_width << 'x' << render_height << '@'
+                      << (target_refresh_mhz / 1000.0) << "Hz]";
+
       const std::string configure_command =
         R"(if [ -x "$HOME/.local/bin/apollo-display-mode" ]; then "$HOME/.local/bin/apollo-display-mode" configure )" +
         std::to_string(render_width) + " " +
-        std::to_string(render_height) +
+        std::to_string(render_height) + " " +
+        std::to_string(target_refresh_mhz) +
         R"(; fi)";
 
       const int configure_result = std::system(configure_command.c_str());
       if (configure_result != 0) {
-        BOOST_LOG(warning) << "KWin virtual-display resolution helper failed with code ["
+        BOOST_LOG(warning) << "KWin virtual-display mode helper failed with code ["
                            << configure_result << "]; continuing with the existing output.";
       }
     }
