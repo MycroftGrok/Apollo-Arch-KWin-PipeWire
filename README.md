@@ -6,7 +6,7 @@ Apollo is a self-hosted desktop stream host for [Artemis(Moonlight Noir)](https:
 
 Major features:
 
-- [x] Built-in Virtual Display with HDR support that matches the resolution/framerate config of your client automatically **STILL A WORK IN PROGRESS**
+- [x] KWin virtual display automatically matches the client resolution and refresh rate on the tested KDE Wayland path
 - [x] **Linux Virtual Display support using KWIN** *(new in this fork!)*
 - [x] GUI Configuration page now directly reads/writes to Apollo configs.
 - [x] Local monitors turn off when Artemis is connected.
@@ -23,6 +23,7 @@ This fork adds **real virtual display support for Linux** using [KWIN](https://g
 - Dynamic loading of KWIN library (no hard dependency)
 - Automatic KWIN module loading on boot
 - Works with AMD, Intel, and Nvidia GPUs via VAAPI
+- PipeWire DMA-BUF capture when supported by EGL/KWin
 
 ### Requirements (Required repositories, files, utilites and etc)
 - 
@@ -68,20 +69,101 @@ Apollo itself should be updated by pulling the latest version of this
 repository, rebuilding it using the installation procedure below, and
 installing the resulting package with `pacman -U`.
 
-## Installation on Arch Linux (CachyOS was the OS used for all testing)
+## Installation on CachyOS / Arch Linux with KDE Wayland
+
+> [!IMPORTANT]
+> This fork's tested Linux virtual-display path uses **KWin + PipeWire** on KDE
+> Wayland. Do not install or configure EVDI for this path.
+
+The tested host environment is CachyOS with KDE Plasma running a Wayland
+session. Clone this fork, switch to the KWin/PipeWire branch, then run the
+installer as your normal desktop user:
 
 ```bash
-# Install EVDI
-sudo pacman -S evdi-dkms
+git clone https://github.com/MycroftGrok/Apollo-Arch-KWin-PipeWire.git
+cd Apollo-Arch-KWin-PipeWire
+git switch kwin-pipewire-capture-port
 
-# Build and install Apollo
-makepkg -si
+./scripts/install-cachyos-kwin-pipewire.sh
 ```
 
-The install script will automatically:
-- Set up required capabilities (`cap_sys_admin`)
-- Load the EVDI kernel module
-- Configure automatic module loading on boot
+The installer performs a clean local build without deleting the source tree,
+builds the Arch package, verifies that the package contains Apollo's runtime
+web assets, and installs the package with `pacman -U`.
+
+### KWin/PipeWire configuration installed by the script
+
+The default persistent virtual monitor is:
+
+```text
+Apollo-Display
+```
+
+KWin exposes it to Apollo as:
+
+```text
+Virtual-Apollo-Display
+```
+
+Apollo is configured with:
+
+```text
+capture = kwin
+output_name = Virtual-Apollo-Display
+preserve_physical_display = enabled
+fallback_mode = 1920x1080x60
+kwin_virtual_display_client_override = enabled
+```
+
+When a client starts a stream, Apollo requests the client's resolution and
+refresh rate from KWin. For example, a client requesting 1920x1080 at 120 Hz
+selects the closest KWin mode (approximately 119.93 Hz on the tested system)
+and forces scale 1 so the logical and physical stream resolutions match.
+
+The virtual monitor is persistent across Apollo service restarts but normally
+remains disabled while idle. The display lifecycle helper enables it for the
+stream and restores the normal physical-display layout after disconnect.
+
+### PipeWire DMA-BUF
+
+On compatible EGL/Mesa/KWin configurations, this fork advertises supported
+DMA-BUF formats and modifiers to PipeWire. When negotiation succeeds, Apollo
+logs:
+
+```text
+[pipewire] using DMA-BUF buffers
+```
+
+This avoids the normal CPU memory-buffer copy in the KWin/PipeWire capture
+path before VAAPI encoding.
+
+### Package-owned web assets
+
+Apollo is compiled to use:
+
+```text
+/usr/local/assets
+```
+
+Those files are owned and installed by the Arch package. The installer does
+**not** delete or manually recopy `/usr/local/assets`; `pacman -U` manages
+them.
+
+### Updating this fork
+
+Pull the latest branch, rerun the installer, and allow the newly built package
+to replace the installed custom Apollo package:
+
+```bash
+cd Apollo-Arch-KWin-PipeWire
+git switch kwin-pipewire-capture-port
+git pull --ff-only
+
+./scripts/install-cachyos-kwin-pipewire.sh
+```
+
+The package uses `epoch=1000`, so normal `sudo pacman -Syu` upgrades do not
+replace this custom KWin/PipeWire build with the repository Apollo package.
 
 ## Usage
 

@@ -4,8 +4,8 @@ set -euo pipefail
 # Apollo KWin/PipeWire virtual-display installer for CachyOS/Arch KDE Wayland.
 # Run as a normal user from inside the patched Apollo-Linux repo.
 
-APOLLO_CAPTURE_NAME="${APOLLO_CAPTURE_NAME:-Virtual-apollo-test}"
-APOLLO_VIRTUAL_NAME="${APOLLO_VIRTUAL_NAME:-apollo-test}"
+APOLLO_VIRTUAL_NAME="${APOLLO_VIRTUAL_NAME:-Apollo-Display}"
+APOLLO_CAPTURE_NAME="${APOLLO_CAPTURE_NAME:-Virtual-${APOLLO_VIRTUAL_NAME}}"
 APOLLO_VIRTUAL_RESOLUTION="${APOLLO_VIRTUAL_RESOLUTION:-1920x1080}"
 APOLLO_VIRTUAL_PORT="${APOLLO_VIRTUAL_PORT:-5905}"
 APOLLO_VIRTUAL_PASSWORD="${APOLLO_VIRTUAL_PASSWORD:-apollotest}"
@@ -89,11 +89,13 @@ command -v kdotool >/dev/null 2>&1 || fail "kdotool was not found after install.
 
 say "Building Apollo"
 rm -rf cmake-build-debug pkg src_assets/common/assets/web/node_modules/.vite
+[ -d src ] || fail "Safety check failed: src directory is missing after build cleanup."
 
 cmake -S . -B cmake-build-debug -G Ninja \
   -DCMAKE_BUILD_TYPE=Release \
   -DSUNSHINE_ENABLE_CUDA=OFF \
-  -DCUDA_FAIL_ON_MISSING=OFF
+  -DCUDA_FAIL_ON_MISSING=OFF \
+  -DUSE_UHID=ON
 
 ninja -C cmake-build-debug -j"$(nproc)"
 
@@ -107,29 +109,43 @@ makepkg -fs --noconfirm
 pkg_file="$(find . -maxdepth 1 -type f -name 'apollo-*.pkg.tar.zst' -printf '%T@ %p\n' | sort -nr | head -n 1 | cut -d' ' -f2-)"
 [ -n "$pkg_file" ] || fail "Could not find generated apollo package."
 
+say "Verifying packaged Apollo web assets"
+if ! bsdtar -tf "$pkg_file" | grep -qx 'usr/local/assets/web/index.html'; then
+  fail "Generated package is missing usr/local/assets/web/index.html."
+fi
+
 say "Installing Apollo package"
 sudo pacman -U --noconfirm "$pkg_file"
 
-if [ -d cmake-build-debug/assets ]; then
-  say "Installing Apollo web assets"
-  sudo rm -rf /usr/local/assets
-  sudo mkdir -p /usr/local/assets
-  sudo cp -a cmake-build-debug/assets/. /usr/local/assets/
-fi
+[ -f /usr/local/assets/web/index.html ] || \
+  fail "Apollo package installed, but /usr/local/assets/web/index.html is missing."
 
 say "Writing Apollo capture config"
 mkdir -p "$HOME/.config/sunshine"
 touch "$HOME/.config/sunshine/sunshine.conf"
-APOLLO_CAPTURE_NAME="$APOLLO_CAPTURE_NAME" python3 - <<'PY'
+APOLLO_CAPTURE_NAME="$APOLLO_CAPTURE_NAME" \
+APOLLO_VIRTUAL_RESOLUTION="$APOLLO_VIRTUAL_RESOLUTION" \
+python3 - <<'PY'
 import os
 from pathlib import Path
+
 p = Path.home() / ".config/sunshine/sunshine.conf"
 lines = p.read_text().splitlines()
-remove = ("capture =", "output_name =", "preserve_physical_display =")
+remove = (
+    "capture =",
+    "output_name =",
+    "preserve_physical_display =",
+    "fallback_mode =",
+    "kwin_virtual_display_client_override =",
+)
 lines = [x for x in lines if not x.startswith(remove)]
+
 lines.append("capture = kwin")
 lines.append(f"output_name = {os.environ['APOLLO_CAPTURE_NAME']}")
 lines.append("preserve_physical_display = enabled")
+lines.append(f"fallback_mode = {os.environ['APOLLO_VIRTUAL_RESOLUTION']}x60")
+lines.append("kwin_virtual_display_client_override = enabled")
+
 p.write_text("\n".join(lines) + "\n")
 PY
 
@@ -156,8 +172,7 @@ say "Creating automatic KDE virtual-monitor service"
 krfb_bin="$(command -v krfb-virtualmonitor)"
 cat > "$HOME/.config/systemd/user/apollo-kwin-virtual-monitor.service" <<EOF2
 [Unit]
-Description=KDE virtual monitor for Apollo KWin capture
-PartOf=apollo.service
+Description=Persistent KDE virtual monitor for Apollo KWin capture
 After=graphical-session.target
 
 [Service]
@@ -197,8 +212,8 @@ printf '%s\n' \
   "  systemctl --user restart apollo" \
   "" \
   "Verify with:" \
-  "  kscreen-doctor -o | grep -A12 -E 'Virtual-apollo|apollo-test|Output:'" \
-  "  journalctl --user -u apollo -n 160 --no-pager | grep -E 'KWin capture output|Initial capture display requested|kwingrab|pipewire|Virtual-apollo|Streaming display'"
+  "  kscreen-doctor -o | grep -A12 -E 'Virtual-Apollo-Display|Apollo-Display|Output:'" \
+  "  journalctl --user -u apollo -n 160 --no-pager | grep -E 'KWin capture output|Initial capture display requested|kwingrab|pipewire|Virtual-Apollo-Display|Streaming display'"
 
 # BEGIN WORKING APOLLO DISPLAY LIFECYCLE
 #
@@ -217,14 +232,8 @@ sudo install -Dm755 \
   "${APOLLO_INSTALL_REPO_ROOT}/scripts/systemd-user/apollo-kscreen-stream-monitors" \
   /usr/local/bin/apollo-kscreen-stream-monitors
 
-# Apollo must receive the built assets, not the source asset directory.
-if [ -d "${APOLLO_INSTALL_REPO_ROOT}/cmake-build-debug/assets" ]; then
-  sudo rm -rf /usr/local/assets
-  sudo install -d /usr/local/assets
-  sudo cp -a \
-    "${APOLLO_INSTALL_REPO_ROOT}/cmake-build-debug/assets/." \
-    /usr/local/assets/
-fi
+# /usr/local/assets is package-owned. pacman -U above installs/replaces it.
+# Never delete or recopy it manually here.
 
 # Establish the safe idle state when KScreen is available.
 if command -v kscreen-doctor >/dev/null 2>&1; then
