@@ -27,6 +27,7 @@
 
 // local includes
 #include "config.h"
+#include "capture_diagnostics.h"
 #include "crypto.h"
 #include "display_device.h"
 #include "file_handler.h"
@@ -242,6 +243,8 @@ namespace proc {
         BOOST_LOG(info) << "Using client-requested KWin virtual-display resolution ["
                         << render_width << 'x' << render_height << ']';
       }
+
+      capture_diagnostics::set_requested_resolution(render_width, render_height);
 
       uint32_t target_refresh_mhz = launch_session->fps ? launch_session->fps : 60000;
       if (target_refresh_mhz < 1000) {

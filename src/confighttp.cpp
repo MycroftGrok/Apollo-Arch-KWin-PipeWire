@@ -26,6 +26,7 @@
 
 // local includes
 #include "config.h"
+#include "capture_diagnostics.h"
 #include "confighttp.h"
 #include "crypto.h"
 #include "display_device.h"
@@ -1016,6 +1017,41 @@ namespace confighttp {
   }
 
   /**
+   * @brief Get the current capture diagnostics snapshot.
+   * @param response The HTTP response object.
+   * @param request The HTTP request object.
+   *
+   * @api_examples{/api/diagnostics| GET| null}
+   */
+  void getDiagnostics(resp_https_t response, req_https_t request) {
+    if (!authenticate(response, request)) {
+      return;
+    }
+
+    print_req(request);
+
+    const auto runtime = capture_diagnostics::snapshot();
+
+    nlohmann::json output_tree;
+    output_tree["status"] = true;
+    output_tree["capture_backend"] =
+      config::video.capture.empty() ? "auto" : config::video.capture;
+    output_tree["configured_output"] = config::video.output_name;
+    output_tree["client_mode_match"] =
+      config::video.kwin_virtual_display_client_override;
+    output_tree["requested_width"] = runtime.requested_width;
+    output_tree["requested_height"] = runtime.requested_height;
+    output_tree["requested_fps"] = runtime.requested_fps;
+    output_tree["pipewire_buffer_type"] =
+      capture_diagnostics::buffer_type_name(runtime.buffer_type);
+    output_tree["egl_dmabuf_formats"] = runtime.egl_dmabuf_formats;
+    output_tree["advertised_dmabuf_formats"] =
+      runtime.advertised_dmabuf_formats;
+
+    send_response(response, output_tree);
+  }
+
+  /**
    * @brief Get the locale setting.
    * @param response The HTTP response object.
    * @param request The HTTP request object.
@@ -1540,6 +1576,7 @@ namespace confighttp {
     server.resource["^/api/apps/launch$"]["POST"] = launchApp;
     server.resource["^/api/apps/close$"]["POST"] = closeApp;
     server.resource["^/api/logs$"]["GET"] = getLogs;
+    server.resource["^/api/diagnostics$"]["GET"] = getDiagnostics;
     server.resource["^/api/config$"]["GET"] = getConfig;
     server.resource["^/api/config$"]["POST"] = saveConfig;
     server.resource["^/api/configLocale$"]["GET"] = getLocale;

@@ -43,6 +43,8 @@ constexpr bool SUNSHINE_USE_PIPEWIRE_OBJECT_SERIAL = false;  ///< Whether PipeWi
   #define PW_KEY_TARGET_OBJECT "target.object"
 #endif
 
+#include "../../capture_diagnostics.h"
+
 namespace {
   // Buffer and limit constants
   constexpr int SPA_POD_BUFFER_SIZE = 4096;
@@ -673,9 +675,11 @@ namespace pipewire {
       uint32_t buffer_types = 0;
       if (spa_pod_find_prop(param, nullptr, SPA_FORMAT_VIDEO_modifier) != nullptr && d->drm_format) {
         BOOST_LOG(info) << "[pipewire] using DMA-BUF buffers"sv;
+        capture_diagnostics::set_buffer_type(capture_diagnostics::buffer_type_e::dmabuf);
         buffer_types |= 1 << SPA_DATA_DmaBuf;
       } else {
         BOOST_LOG(info) << "[pipewire] using memory buffers"sv;
+        capture_diagnostics::set_buffer_type(capture_diagnostics::buffer_type_e::memory);
         buffer_types |= 1 << SPA_DATA_MemPtr;
       }
 
@@ -801,6 +805,9 @@ namespace pipewire {
       framerate = config.framerate;
       delay = std::chrono::nanoseconds {1s} / config.framerate;
       const AVRational fps {config.framerate, 1};
+      capture_diagnostics::set_requested_fps(
+        config.framerate > 0 ? static_cast<std::uint32_t>(config.framerate) : 0
+      );
       if (fps.den != 1) {
         BOOST_LOG(info) << "[pipewire] Requested frame rate [" << fps.num << "/" << fps.den << ", approx. " << av_q2d(fps) << " fps]";
       } else {
@@ -1184,6 +1191,9 @@ namespace pipewire {
 
       BOOST_LOG(info) << "[pipewire] EGL reports ["sv << num_dmabuf_formats
                       << "] DMA-BUF formats"sv;
+      capture_diagnostics::set_egl_dmabuf_formats(
+        num_dmabuf_formats > 0 ? static_cast<std::uint32_t>(num_dmabuf_formats) : 0
+      );
 
       if (num_dmabuf_formats > MAX_DMABUF_FORMATS) {
         BOOST_LOG(warning) << "[pipewire] Some DMA-BUF formats are being ignored"sv;
@@ -1267,6 +1277,9 @@ namespace pipewire {
       }
 
       query_dmabuf_formats(egl_display.get());
+      capture_diagnostics::set_advertised_dmabuf_formats(
+        static_cast<std::uint32_t>(n_dmabuf_infos)
+      );
       BOOST_LOG(info) << "[pipewire] Advertising ["sv << n_dmabuf_infos
                       << "] DMA-BUF formats to PipeWire"sv;
 

@@ -113,7 +113,74 @@
         </div>
       </div>
     </div>
-    <!-- Logs -->
+    <!-- Capture Diagnostics -->
+  <div class="card p-2 my-4">
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-center">
+        <h2 id="capture-diagnostics">Capture Diagnostics</h2>
+        <button class="btn btn-sm btn-outline-secondary" @click="refreshDiagnostics">
+          Refresh
+        </button>
+      </div>
+      <br>
+      <p>
+        Live and last-known values reported directly by Apollo's KWin/PipeWire capture path.
+      </p>
+
+      <div class="alert alert-danger" v-if="diagnosticsError">
+        Capture diagnostics could not be loaded.
+      </div>
+
+      <div v-if="!diagnostics && !diagnosticsError">
+        Loading capture diagnostics...
+      </div>
+
+      <div class="table-responsive" v-if="diagnostics">
+        <table class="table table-sm align-middle mb-0">
+          <tbody>
+            <tr>
+              <th scope="row">Capture backend</th>
+              <td>{{ diagnostics.capture_backend || 'Unknown' }}</td>
+            </tr>
+            <tr>
+              <th scope="row">Configured output</th>
+              <td>{{ diagnostics.configured_output || 'Automatic' }}</td>
+            </tr>
+            <tr>
+              <th scope="row">Client mode matching</th>
+              <td>{{ diagnostics.client_mode_match ? 'Enabled' : 'Disabled' }}</td>
+            </tr>
+            <tr>
+              <th scope="row">Last requested resolution</th>
+              <td>
+                {{ diagnostics.requested_width && diagnostics.requested_height
+                  ? diagnostics.requested_width + ' × ' + diagnostics.requested_height
+                  : 'No stream data yet' }}
+              </td>
+            </tr>
+            <tr>
+              <th scope="row">Last requested PipeWire FPS</th>
+              <td>{{ diagnostics.requested_fps || 'No stream data yet' }}</td>
+            </tr>
+            <tr>
+              <th scope="row">PipeWire buffers</th>
+              <td>{{ diagnostics.pipewire_buffer_type || 'unknown' }}</td>
+            </tr>
+            <tr>
+              <th scope="row">EGL DMA-BUF formats</th>
+              <td>{{ diagnostics.egl_dmabuf_formats }}</td>
+            </tr>
+            <tr>
+              <th scope="row">DMA-BUF formats advertised to PipeWire</th>
+              <td>{{ diagnostics.advertised_dmabuf_formats }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Logs -->
     <div class="card p-2 my-4">
       <div class="card-body">
         <h2 id="logs">{{ $t('troubleshooting.logs') }}</h2>
@@ -151,6 +218,9 @@
           logs: 'Loading...',
           logFilter: null,
           logInterval: null,
+          diagnostics: null,
+          diagnosticsError: false,
+          diagnosticsInterval: null,
           serverRestarting: false,
           serverQuitting: false,
           serverQuit: false,
@@ -176,11 +246,36 @@
           this.refreshLogs();
         }, 5000);
         this.refreshLogs();
+
+        this.diagnosticsInterval = setInterval(() => {
+          this.refreshDiagnostics();
+        }, 2000);
+        this.refreshDiagnostics();
       },
       beforeDestroy() {
         clearInterval(this.logInterval);
+        clearInterval(this.diagnosticsInterval);
       },
       methods: {
+        refreshDiagnostics() {
+          fetch("./api/diagnostics", {
+            credentials: 'include'
+          })
+            .then((response) => {
+              if (!response.ok) {
+                throw new Error("Diagnostics request failed");
+              }
+              return response.json();
+            })
+            .then((data) => {
+              this.diagnostics = data;
+              this.diagnosticsError = false;
+            })
+            .catch((error) => {
+              this.diagnosticsError = true;
+              console.error("Error fetching capture diagnostics:", error);
+            });
+        },
         refreshLogs() {
           fetch("./api/logs", {
             credentials: 'include'
